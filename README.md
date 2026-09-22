@@ -3,3 +3,4 @@ PROYECTO CEREZA
 - caracterizar la base de datso
 - george ordena los datos etc
 - ronny t quiero mucho
+- george de la selva
