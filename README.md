@@ -1,6 +1,4 @@
-PROYECTO CEREZA
-- probamdo 123 123 probando
-- caracterizar la base de datso
+PROYECTO LA CEREZA EN EL PASTEL 
 - george ordena los datos etc
 - ronny t quiero mucho
 - george de la selva
