@@ -5,13 +5,13 @@ library(patchwork)
 
 # 2. Definir los nombres exactos de los archivos
 archivos_csv <- c(
-  "12218618650_UserData42iQ_2025-06-19_14-49-00_Sinsonda.csv",
-  "12218618650_UserData42iQ_2025-07-25_13-48-35_Sinsonda.csv"
+  "NOx-junio-julio/12218618650_UserData42iQ_2025-06-19_14-49-00_Sinsonda.csv",
+  "NOx-junio-julio/12218618650_UserData42iQ_2025-07-25_13-48-35_Sinsonda.csv"
 )
 
 archivos_dat <- c(
-  "NOx_42i_Portillo_junio_2025_Sonda.dat",
-  "NOx_42i_julio_Portillo_Sonda.dat"
+  "NOx-junio-julio/NOx_42i_Portillo_junio_2025_Sonda.dat",
+  "NOx-junio-julio/NOx_42i_julio_Portillo_Sonda.dat"
 )
 
 # 3. Función para leer los CSV (Equipo Sin Sonda)
