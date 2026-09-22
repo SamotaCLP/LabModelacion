@@ -597,12 +597,16 @@ for (inst in c("AE33", "AE36", "MAAP")) {
     dplyr::select(orden, date, valor = dplyr::all_of(inst)) |>
     dplyr::filter(is.finite(valor))
   
-  p <- ggplot(df_i, aes(x = orden, y = valor)) +
+  p <- ggplot(df_i, aes(x = date, y = valor)) +
     geom_point(alpha = 0.45, size = 0.7) +
+    scale_x_datetime(
+      date_breaks = "3 days",
+      date_labels = "%d-%m"
+    ) +
     labs(
       title = paste("Datos individuales -", inst),
       subtitle = paste(NOMBRE_ANALITO, "|", UNIDAD_COMUN),
-      x = "Orden de observación",
+      x = "Fecha",
       y = "Medición"
     )
   
@@ -764,14 +768,21 @@ for (inst in c("AE33", "AE36", "MAAP")) {
 
 p_series_3 <- datos_long |>
   dplyr::filter(is.finite(medicion)) |>
-  ggplot(aes(x = date, y = medicion, group = instrumento)) +
-  geom_line(aes(linetype = instrumento), linewidth = 0.35, alpha = 0.8) +
+  ggplot(aes(x = date, y = medicion, group = instrumento, color = instrumento)) +
+  geom_line(linewidth = 0.6, alpha = 0.85) +
+  scale_color_manual(
+    values = c("AE33" = "#D95F02", "AE36" = "#7570B3", "MAAP" = "#1B9E77")
+  ) +
+  scale_x_datetime(
+    date_breaks = "3 days",
+    date_labels = "%d-%m"
+  ) +
   labs(
     title = "Series temporales - AE33, AE36 y MAAP",
     subtitle = paste(NOMBRE_ANALITO, "|", UNIDAD_COMUN),
     x = "Fecha",
     y = "Medición",
-    linetype = "Instrumento"
+    color = "Instrumento"
   )
 
 guardar_plot(
@@ -785,34 +796,30 @@ guardar_plot(
 # ---------------------------------------------------------------------------
 # 6.6 Series temporales estandarizadas
 # ---------------------------------------------------------------------------
-# Útil para comparar la forma temporal cuando las escalas son distintas
-# o cuando un instrumento tiene mayor dispersión.
-
-datos_z <- datos_analisis |>
-  dplyr::mutate(
-    dplyr::across(
-      c(AE33, AE36, MAAP),
-      ~ as.numeric(scale(.x))
-    )
-  ) |>
-  tidyr::pivot_longer(
-    cols = c(AE33, AE36, MAAP),
-    names_to = "instrumento",
-    values_to = "z"
-  ) |>
-  dplyr::filter(is.finite(z))
 
 p_series_z <- ggplot(
   datos_z,
-  aes(x = date, y = z, group = instrumento)
+  aes(
+    x = date,
+    y = z,
+    group = instrumento,
+    color = instrumento
+  )
 ) +
-  geom_line(aes(linetype = instrumento), linewidth = 0.35, alpha = 0.8) +
+  geom_line(linewidth = 0.6, alpha = 0.85) +
+  scale_color_manual(
+    values = c("AE33" = "#D95F02", "AE36" = "#7570B3", "MAAP" = "#1B9E77")
+  ) +
+  scale_x_datetime(
+    date_breaks = "3 days",
+    date_labels = "%d-%m"
+  ) +
   labs(
     title = "Series temporales estandarizadas",
     subtitle = "Cada instrumento expresado en puntajes z",
     x = "Fecha",
     y = "z",
-    linetype = "Instrumento"
+    color = "Instrumento"
   )
 
 guardar_plot(
@@ -1139,15 +1146,16 @@ analizar_par <- function(
       x = date,
       y = valor,
       group = serie,
-      linetype = serie
+      color = serie
     )
   ) +
-    geom_line(linewidth = 0.35, alpha = 0.85) +
+    geom_line(linewidth = 0.5, alpha = 0.85) +
+    scale_color_brewer(palette = "Set1") +
     labs(
       title = paste("Series temporales:", nombre_x, "y", nombre_y),
       x = "Fecha",
       y = "Medición",
-      linetype = "Instrumento"
+      color = "Instrumento"
     )
   
   guardar_plot(
