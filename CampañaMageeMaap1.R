@@ -1678,3 +1678,4 @@ cat("   suficientes. Los estimadores puntuales siguen siendo descriptivos, pero\
 cat("   para inferencia conviene usar métodos de series/repeated measures o\n")
 cat("   bootstrap por bloques.\n")
 cat("============================================================\n")
+
