@@ -121,7 +121,28 @@ ELIMINAR_NEGATIVOS <- FALSE
 
 # Si quieren eliminar valores absurdamente grandes por un criterio físico
 # previamente definido, pueden poner un límite. Por defecto no se recorta nada.
-LIMITE_SUPERIOR <- Inf
+LIMITE_SUPERIOR <- 30000
+
+if (is.finite(LIMITE_SUPERIOR)) {
+  
+  n_outliers <- datos_analisis |>
+    dplyr::summarise(
+      AE33 = sum(AE33 > LIMITE_SUPERIOR, na.rm = TRUE),
+      AE36 = sum(AE36 > LIMITE_SUPERIOR, na.rm = TRUE),
+      MAAP = sum(MAAP > LIMITE_SUPERIOR, na.rm = TRUE)
+    )
+  
+  cat("\nValores eliminados por superar", LIMITE_SUPERIOR, ":\n")
+  print(n_outliers)
+  
+  datos_analisis <- datos_analisis |>
+    dplyr::mutate(
+      dplyr::across(
+        c(AE33, AE36, MAAP),
+        ~ ifelse(.x > LIMITE_SUPERIOR, NA_real_, .x)
+      )
+    )
+}
 
 # ---------------------------------------------------------------------------
 # Probability of Agreement (PA)
