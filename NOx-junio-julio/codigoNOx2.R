@@ -16,19 +16,27 @@ archivos_dat <- c(
 
 # 3. Función para leer los CSV (Equipo Sin Sonda)
 leer_csv_sinsonda <- function(archivo) {
-  df <- read_csv(archivo, show_col_types = FALSE)
+  
+  df <- read_csv(
+    archivo,
+    show_col_types = FALSE
+  )
   
   df_limpio <- df %>%
-    # Según la imagen: Col 1 = Tiempo, Col 8 = NO, Col 10 = NOx
-    select(tiempo_raw = 1, no_sinsonda = 8, nox_sinsonda = 10) %>%
+    select(
+      tiempo_raw = 1,
+      no_sinsonda = 8,
+      nox_sinsonda = 10
+    ) %>%
     mutate(
-      tiempo_str = as.character(tiempo_raw),
-      tiempo = parse_date_time(tiempo_str, orders = c("dmy_HMS", "mdy_HMS", "ymd_HMS", "mdy_HM")),
+      tiempo = dmy_hms(as.character(tiempo_raw)),
       no_sinsonda = as.numeric(no_sinsonda),
       nox_sinsonda = as.numeric(nox_sinsonda)
     ) %>%
-    drop_na(tiempo) %>%
-    mutate(tiempo_redondeado = floor_date(tiempo, "10 mins")) %>%
+    filter(!is.na(tiempo)) %>%
+    mutate(
+      tiempo_redondeado = floor_date(tiempo, "10 minutes")
+    ) %>%
     group_by(tiempo_redondeado) %>%
     summarise(
       no_sinsonda = mean(no_sinsonda, na.rm = TRUE),
@@ -39,19 +47,32 @@ leer_csv_sinsonda <- function(archivo) {
   return(df_limpio)
 }
 
-# 4. Función para leer los DAT (Equipo Sonda)
+# 4. Función para leer los DAT (Equipo Sonda) - Corregida
 leer_dat_sonda <- function(archivo) {
-  df <- read_table(archivo, skip = 5, show_col_types = FALSE)
+  
+  df <- read_table(
+    archivo,
+    comment = ";;", # Ignora todas las líneas de encabezado con metadatos (;;)
+    col_types = cols(
+      Time = col_character(),
+      Date = col_character(),
+      Flags = col_character(),
+      no = col_double(),
+      nox = col_double(),
+      hino = col_double(),
+      hinox = col_double()
+    )
+  )
   
   df_limpio <- df %>%
     mutate(
-      fecha_hora_texto = paste(Date, Time),
-      tiempo = parse_date_time(fecha_hora_texto, orders = c("mdy_HM", "dmy_HM")),
-      tiempo_redondeado = floor_date(tiempo, "10 mins"),
-      no_sonda = as.numeric(no),
-      nox_sonda = as.numeric(nox)
+      # Unimos Date ("05-30-25") y Time ("14:45") -> mdy_hm procesa bien años de 2 dígitos
+      tiempo = mdy_hm(paste(Date, Time)),
+      tiempo_redondeado = floor_date(tiempo, "10 minutes"),
+      no_sonda = no,
+      nox_sonda = nox
     ) %>%
-    drop_na(tiempo_redondeado) %>%
+    filter(!is.na(tiempo_redondeado)) %>%
     group_by(tiempo_redondeado) %>%
     summarise(
       no_sonda = mean(no_sonda, na.rm = TRUE),
@@ -75,12 +96,59 @@ todas_sonda <- map_dfr(archivos_dat, leer_dat_sonda) %>%
             nox_sonda = mean(nox_sonda, na.rm = TRUE),
             .groups = "drop")
 
+cat("\n--- SIN SONDA ---\n")
+print(range(todas_sinsonda$tiempo_redondeado, na.rm = TRUE))
+print(nrow(todas_sinsonda))
+
+cat("\n--- CON SONDA ---\n")
+print(range(todas_sonda$tiempo_redondeado, na.rm = TRUE))
+print(nrow(todas_sonda))
+
+cat("\n--- FECHAS EN COMÚN ---\n")
+
+fechas_comunes <- intersect(
+  todas_sonda$tiempo_redondeado,
+  todas_sinsonda$tiempo_redondeado
+)
+
+print(length(fechas_comunes))
+
+if (length(fechas_comunes) > 0) {
+  print(head(fechas_comunes))
+  print(tail(fechas_comunes))
+}
+
 # 6. UNIR AMBAS BASES
 df_unido <- inner_join(todas_sonda, todas_sinsonda, by = "tiempo_redondeado") %>%
   rename(tiempo = tiempo_redondeado) %>%
   drop_na()
 
 print(paste("--> Puntos emparejados (cada 10 min):", nrow(df_unido)))
+
+cat("\n==============================\n")
+cat("DIAGNÓSTICO DE df_unido\n")
+cat("==============================\n")
+
+cat("Número de filas:", nrow(df_unido), "\n")
+
+if (nrow(df_unido) > 0) {
+  
+  print(head(df_unido))
+  
+  cat("\nRango temporal:\n")
+  print(range(df_unido$tiempo, na.rm = TRUE))
+  
+  cat("\nResumen de NO:\n")
+  print(summary(df_unido[, c("no_sonda", "no_sinsonda")]))
+  
+  cat("\nResumen de NOx:\n")
+  print(summary(df_unido[, c("nox_sonda", "nox_sinsonda")]))
+  
+} else {
+  
+  cat("\n¡¡¡ df_unido ESTÁ VACÍO !!!\n")
+  cat("No existen timestamps coincidentes entre ambos equipos.\n")
+}
 
 # 7. CÁLCULOS PARA BLAND-ALTMAN DE AMBOS COMPUESTOS
 df_unido <- df_unido %>%
@@ -164,3 +232,16 @@ graficos_nox <- (series_nox) / (cor_nox | bland_nox) + plot_annotation(title = "
 # ---------------------------------------------------------
 print(graficos_no)
 print(graficos_nox)
+
+
+print(range(todas_sinsonda$tiempo_redondeado, na.rm = TRUE))
+print(range(todas_sonda$tiempo_redondeado, na.rm = TRUE))
+
+fechas_comunes <- intersect(
+  todas_sonda$tiempo_redondeado,
+  todas_sinsonda$tiempo_redondeado
+)
+
+print(length(fechas_comunes))
+print(head(fechas_comunes))
+print("------------------------")
