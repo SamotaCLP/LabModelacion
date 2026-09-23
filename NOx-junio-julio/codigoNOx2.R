@@ -228,20 +228,32 @@ bland_nox <- ggplot(df_unido, aes(x = prom_nox, y = dif_nox)) +
 graficos_nox <- (series_nox) / (cor_nox | bland_nox) + plot_annotation(title = "ANÁLISIS COMPARATIVO: NOx", theme = theme(plot.title = element_text(face = "bold", size = 14)))
 
 # ---------------------------------------------------------
-# 10. MOSTRAR GRÁFICOS
+# 10. MOSTRAR Y GUARDAR GRÁFICOS
 # ---------------------------------------------------------
+
+# Mostrar en consola/pantalla
 print(graficos_no)
 print(graficos_nox)
 
+# Definir la ruta del directorio donde se guardarán los gráficos
+directorio_salida <- "NOx-junio-julio"
 
-print(range(todas_sinsonda$tiempo_redondeado, na.rm = TRUE))
-print(range(todas_sonda$tiempo_redondeado, na.rm = TRUE))
-
-fechas_comunes <- intersect(
-  todas_sonda$tiempo_redondeado,
-  todas_sinsonda$tiempo_redondeado
+# Guardar el panel de gráficos de NO
+ggsave(
+  filename = file.path(directorio_salida, "graficos_NO.png"),
+  plot = graficos_no,
+  width = 10,       # Ancho de la imagen en pulgadas
+  height = 8,       # Alto de la imagen en pulgadas
+  dpi = 300         # Resolución de alta calidad para informes/publicaciones
 )
 
-print(length(fechas_comunes))
-print(head(fechas_comunes))
-print("------------------------")
+# Guardar el panel de gráficos de NOx
+ggsave(
+  filename = file.path(directorio_salida, "graficos_NOx.png"),
+  plot = graficos_nox,
+  width = 10,
+  height = 8,
+  dpi = 300
+)
+
+cat("\n¡Gráficos guardados exitosamente en la carpeta:", directorio_salida, "!\n")
