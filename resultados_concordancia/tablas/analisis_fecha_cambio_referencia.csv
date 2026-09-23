@@ -1,0 +1,9 @@
+indicador,valor
+Primer registro válido AE33,2026-06-15 00:05:00
+Último registro válido AE33,2026-08-10 12:05:00
+Primer registro válido AE36,2026-06-16 16:05:00
+Último registro válido AE36,2026-08-10 16:35:00
+Inicio del solapamiento AE33-AE36,2026-06-16 16:05:00
+Fin del solapamiento AE33-AE36,2026-08-10 12:05:00
+Fecha utilizada para el cambio AE33->AE36,2026-08-10 12:10:00
+Fuente de la fecha de cambio,automática: primer AE36 válido posterior al último AE33 válido
