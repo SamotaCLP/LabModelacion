@@ -1,5 +1,5 @@
 PROYECTO MEDICIONES AMBIENTALES 
-por George el heroe
+por george el heroe
 COSAS POR HACER:
 + Sincronizar datos (BC)
   - Histogramas de diferencias
@@ -10,3 +10,6 @@ COSAS POR HACER:
   - Hacer serie temporal completa
   - hacer test de normalidad
 + NOX (hacer mas)
++ revisar codigos yumi
++ preparar algo para el roni
++ nose
