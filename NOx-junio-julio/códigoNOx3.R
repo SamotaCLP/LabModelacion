@@ -508,3 +508,4 @@ legend("topleft", legend = ecuacion_NOx, text.col = "red", bty = "n", cex = 0.9)
 # 6. Restaurar la configuración gráfica a 1 solo panel para futuros gráficos
 par(mfrow = c(1, 1))
 
+#hola
