@@ -57,17 +57,123 @@ cat("\nAnálisis de integridad (Base 06_19 contenida en 07_25):\n")
 cat("-------------------------------------------------------\n")
 verificar_inclusion(iQ_sinsonda_datos_junio, iQ_sinsonda_datos_totales)
 
-# GRÁFICO HISTÓRICO SIN SONDA
-plot(x = iQ_sinsonda_datos_totales$Fecha_y_Hora, y = iQ_sinsonda_datos_totales$Concentracion_NO, 
-     type = "l", col = "blue", lwd = 1.5, 
-     main = "Concentración de NO (Sin Sonda - Histórico)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NO")
 
-# EXTRACCIÓN PERIODO ESTUDIO SIN SONDA (25 JUNIO - 25 JULIO)
-fecha_inicio <- as.POSIXct("25/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
-fecha_fin <- as.POSIXct("25/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
+# ==========================================
+# SECCIÓN 12: DIAGNÓSTICO PROFUNDO DE NEGATIVOS (SIN SONDA)
+# ==========================================
 
-iQ_sinsonda_datos_periodo <- subset(iQ_sinsonda_datos_totales, Fecha_y_Hora >= fecha_inicio & Fecha_y_Hora <= fecha_fin)
+reportar_negativos_detallado <- function(df, columna) {
+  # Contabilizar el total de datos en el dataframe
+  total_filas <- nrow(df)
+  
+  # Filtrar los valores negativos
+  filas_neg <- df[which(df[[columna]] < 0), ]
+  n_neg <- nrow(filas_neg)
+  
+  cat(sprintf("\n--- %s ---\n", columna))
+  cat(sprintf("Datos totales en el periodo: %d\n", total_filas))
+  
+  if (n_neg > 0) {
+    porcentaje <- (n_neg / total_filas) * 100
+    cat(sprintf("Cantidad de negativos: %d (%.4f%% del total)\n", n_neg, porcentaje))
+    
+    # Identificar el valor más extremo y su fecha
+    indice_minimo <- which.min(filas_neg[[columna]])
+    valor_minimo <- filas_neg[[columna]][indice_minimo]
+    fecha_minimo <- filas_neg$Fecha_y_Hora[indice_minimo]
+    
+    cat(sprintf("Valor más negativo (Mínimo): %.5f\n", valor_minimo))
+    cat(sprintf("Fecha y hora del mínimo: %s\n", format(fecha_minimo, "%d/%m/%Y %H:%M:%S")))
+    
+    cat("\nMuestra de los primeros registros negativos:\n")
+    print(head(filas_neg[, c("Fecha_y_Hora", columna)], 5))
+  } else {
+    cat("Cantidad de negativos: 0 (0% del total)\n")
+    cat("No hay valores mínimos negativos que reportar.\n")
+  }
+}
+
+cat("\nReporte Detallado de Negativos en CSV (24/06 - 24/07)\n")
+cat("====================================================\n")
+reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO")
+reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO2")
+reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NOx")
+
+# ==========================================
+# SECCIÓN 13: CORRECCIÓN JUSTIFICADA DE NEGATIVOS
+# ==========================================
+
+# Definimos el umbral estadístico de ruido (límite máximo aceptable)
+umbral_ruido <- -3.0
+
+# Función de corrección basada en límites de detección
+limpiar_negativos <- function(vector, limite_ruido) {
+  # 1. Fallas extremas (< -3.0) se vuelven NA
+  vector[vector < limite_ruido & !is.na(vector)] <- NA
+  
+  # 2. Ruido estadístico normal (entre -3.0 y 0) se trunca a 0
+  vector[vector < 0 & vector >= limite_ruido & !is.na(vector)] <- 0
+  
+  return(vector)
+}
+
+# Aplicar la limpieza a tu base sin sonda
+datos_validados_sinsonda <- iQ_sinsonda_datos_periodo
+
+datos_validados_sinsonda$Concentracion_NO <- limpiar_negativos(
+  datos_validados_sinsonda$Concentracion_NO, umbral_ruido
+)
+datos_validados_sinsonda$Concentracion_NO2 <- limpiar_negativos(
+  datos_validados_sinsonda$Concentracion_NO2, umbral_ruido
+)
+datos_validados_sinsonda$Concentracion_NOx <- limpiar_negativos(
+  datos_validados_sinsonda$Concentracion_NOx, umbral_ruido
+)
+
+# Evaluar cuántos datos se perdieron realmente (pasaron a NA)
+cat("\nReporte de Datos Invalidados (Fallas < -3.0)\n")
+cat("NO  : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO)), " registros descartados.\n")
+cat("NO2 : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO2)), " registros descartados.\n")
+cat("NOx : ", sum(is.na(datos_validados_sinsonda$Concentracion_NOx)), " registros descartados.\n")
+
+# ==========================================
+# SECCIÓN 14: COMPARACIÓN DE DATOS CRUDOS VS FILTRADOS (NO)
+# ==========================================
+
+# Configurar la ventana gráfica para mostrar 2 gráficos apilados (2 filas, 1 columna)
+# Ajustamos los márgenes (mar) para que los gráficos no queden tan separados
+par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
+
+# 1. Gráfico de Datos Crudos (con todos los negativos)
+plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, 
+     y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
+     type = "l", col = "gray50", lwd = 1.2,
+     main = "Concentración de NO: Datos Crudos (Sin Filtro)", 
+     xlab = "", ylab = "NO Crudo")
+
+# Añadir líneas de referencia para visualizar el filtro
+abline(h = 0, col = "red", lty = 2)      # Línea del cero ideal
+abline(h = -3.0, col = "darkred", lty = 3) # Línea del umbral de invalidación (-3.0)
+
+# 2. Gráfico de Datos Validados (negativos a 0, fallas a NA)
+plot(x = datos_validados_sinsonda$Fecha_y_Hora, 
+     y = datos_validados_sinsonda$Concentracion_NO, 
+     type = "l", col = "blue", lwd = 1.2,
+     main = "Concentración de NO: Datos Validados (Umbral -3.0)", 
+     xlab = "Fecha y Hora", ylab = "NO Validado")
+
+# Añadir línea de referencia en el cero
+abline(h = 0, col = "red", lty = 2)
+
+# Restaurar la configuración de la ventana gráfica a la normalidad (1 gráfico por vista)
+par(mfrow = c(1, 1))
+
+
+# EXTRACCIÓN PERIODO ESTUDIO SIN SONDA (24 JUNIO - 24 JULIO)
+fecha_inicio <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
+fecha_fin <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
+
+datos_validados_sinsonda <- subset(iQ_sinsonda_datos_totales, Fecha_y_Hora >= fecha_inicio & Fecha_y_Hora <= fecha_fin)
 
 analizar_falla <- function(valores, limite_minutos = 3) {
   rachas <- rle(valores)
@@ -298,9 +404,7 @@ fecha_fin_dat <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
 # 2. Extraer los datos de este periodo
 i_sonda_datos_periodo <- subset(i_sonda_datos_final, Fecha_y_Hora >= fecha_inicio_dat & Fecha_y_Hora <= fecha_fin_dat)
 
-# (Reutilizamos la función por si limpiaste el entorno, si ya la tienes puedes omitir este bloque)
 analizar_falla <- function(valores, limite_minutos = 3) {
-  # Omitimos los NAs (valores vacíos) para que no interfieran en el conteo de rachas
   valores <- na.omit(valores) 
   
   if(length(valores) == 0) {
@@ -320,7 +424,7 @@ analizar_falla <- function(valores, limite_minutos = 3) {
   }
 }
 
-# 3. Ejecutar análisis (Nota: Se omite NO2 porque no viene en el archivo .dat)
+# 3. Ejecutar análisis
 cat("\nReporte de parámetros Base .DAT (Límite: 3 min)\n")
 cat("-----------------------------------------------\n")
 
