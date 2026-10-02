@@ -2,17 +2,23 @@
 # PROCESAMIENTO Y COMPARACIÓN DE EQUIPOS GRIMM
 # CETAM vs MT
 #
-# V5 - OUTLIERS + MÉTRICAS + GRÁFICOS INTERACTIVOS
+# V6 - OUTLIERS + MÉTRICAS + GRÁFICOS INTERACTIVOS
 #
-# Correcciones incluidas:
-#   - Autoescalado dinámico del eje Y en series temporales
-#   - Rangeslider para seleccionar intervalo temporal
-#   - Botones de selección temporal
-#   - full_join() para conservar períodos sin datos de un equipo
-#   - Manejo correcto de NA / NaN
-#   - Regresión OLS robusta ante NA
-#   - Bland-Altman usando solamente pares válidos
-#   - Orden temporal explícito
+# Incluye:
+#   - Eliminación de outliers superiores mediante Q3 + 5*IQR
+#   - Promedios por minuto
+#   - FULL JOIN de las series
+#   - Pearson
+#   - CCC de Lin
+#   - Bias y límites de concordancia
+#   - Bland-Altman
+#   - Scatter + regresión OLS
+#   - Línea de identidad y = x
+#   - R²
+#   - Probability of Agreement
+#   - Rangeslider
+#   - Rangeselector
+#   - Autoescalado dinámico del eje Y
 # ==============================================================================
 
 
@@ -63,8 +69,6 @@ file_mt <- "GRIMM 11D MT 22052025.xlsx"
 
 # ------------------------------------------------------------------------------
 # 4.1 Promedio robusto frente a NA
-#
-# Si todos los valores de un minuto son NA, devuelve NA en vez de NaN.
 # ------------------------------------------------------------------------------
 
 mean_na <- function(x) {
@@ -88,13 +92,9 @@ mean_na <- function(x) {
 # ------------------------------------------------------------------------------
 # 4.2 Eliminación de valores extremos superiores
 #
-# Se utiliza:
+# límite = Q3 + 5 * IQR
 #
-#       límite = Q3 + 5 * IQR
-#
-# IMPORTANTE:
 # Solo se eliminan valores extremos superiores.
-# No se eliminan valores extremos inferiores.
 # ------------------------------------------------------------------------------
 
 remove_extreme_outliers <- function(
@@ -144,96 +144,72 @@ load_grimm_mass <- function(
     skip = 4
   ) %>%
     
-    # --------------------------------------------------------------------------
-  # Renombrar columnas
-  # --------------------------------------------------------------------------
-  
-  rename(
+    rename(
+      
+      datetime_raw = `date&time`,
+      
+      PM10 = `PM10 [ug/m3]`,
+      
+      PM25 = `PM2,5 [ug/m3]`,
+      
+      PM1 = `PM1 [ug/m3]`
+      
+    ) %>%
     
-    datetime_raw = `date&time`,
+    filter(
+      !is.na(datetime_raw)
+    ) %>%
     
-    PM10 = `PM10 [ug/m3]`,
-    
-    PM25 = `PM2,5 [ug/m3]`,
-    
-    PM1 = `PM1 [ug/m3]`
-    
-  ) %>%
-    
-    # --------------------------------------------------------------------------
-  # Eliminar filas sin fecha
-  # --------------------------------------------------------------------------
-  
-  filter(
-    !is.na(datetime_raw)
-  ) %>%
-    
-    # --------------------------------------------------------------------------
-  # Conversión de variables
-  # --------------------------------------------------------------------------
-  
-  mutate(
-    
-    datetime =
-      dmy_hms(
-        datetime_raw
+    mutate(
+      
+      datetime =
+        dmy_hms(
+          datetime_raw
+        ),
+      
+      across(
+        c(
+          PM10,
+          PM25,
+          PM1
+        ),
+        as.numeric
       ),
-    
-    across(
-      c(
-        PM10,
-        PM25,
-        PM1
-      ),
-      as.numeric
-    ),
-    
-    # ------------------------------------------------------------------------
-    # Eliminación de outliers superiores
-    # ------------------------------------------------------------------------
-    
-    across(
-      c(
-        PM10,
-        PM25,
-        PM1
-      ),
-      ~ remove_extreme_outliers(
-        .x,
-        multiplier = 5
+      
+      across(
+        c(
+          PM10,
+          PM25,
+          PM1
+        ),
+        ~ remove_extreme_outliers(
+          .x,
+          multiplier = 5
+        )
       )
+      
+    ) %>%
+    
+    filter(
+      
+      !is.na(datetime),
+      
+      datetime >=
+        ymd(
+          "2025-01-01"
+        )
+      
+    ) %>%
+    
+    mutate(
+      
+      datetime_1m =
+        floor_date(
+          datetime,
+          unit = "1 minute"
+        )
+      
     )
-    
-  ) %>%
-    
-    # --------------------------------------------------------------------------
-  # Filtrar fechas válidas
-  # --------------------------------------------------------------------------
-  
-  filter(
-    
-    !is.na(datetime),
-    
-    datetime >=
-      ymd(
-        "2025-01-01"
-      )
-    
-  ) %>%
-    
-    # --------------------------------------------------------------------------
-  # Redondear a minuto
-  # --------------------------------------------------------------------------
-  
-  mutate(
-    
-    datetime_1m =
-      floor_date(
-        datetime,
-        unit = "1 minute"
-      )
-    
-  )
 }
 
 
@@ -300,15 +276,13 @@ df_m <- load_grimm_mass(
 # ==============================================================================
 # 8. UNIR SERIES TEMPORALES
 #
-# Se utiliza FULL JOIN en lugar de INNER JOIN.
+# FULL JOIN:
 #
-# Esto permite conservar:
+#   - conserva minutos con ambos equipos
+#   - conserva minutos solo de Cetam
+#   - conserva minutos solo de MT
 #
-#   - minutos donde ambos equipos tienen datos
-#   - minutos donde solo Cetam tiene datos
-#   - minutos donde solo MT tiene datos
-#
-# Para las métricas se volverán a utilizar únicamente los pares completos.
+# Las métricas utilizan únicamente pares completos.
 # ==============================================================================
 
 
@@ -376,11 +350,15 @@ calc_metrics <- function(
         
         Parametro = label,
         
+        N = length(x),
+        
         Media_Cetam = NA_real_,
         
         Media_MT = NA_real_,
         
         Pearson = NA_real_,
+        
+        R2 = NA_real_,
         
         CCC_Lin = NA_real_,
         
@@ -396,40 +374,88 @@ calc_metrics <- function(
   
   
   # ============================================================================
-  # Pearson
-  # ============================================================================
-  
-  r_pearson <- cor(
-    x,
-    y,
-    method = "pearson"
-  )
-  
-  
-  # ============================================================================
-  # CCC DE LIN
+  # Medias
   # ============================================================================
   
   mean_x <- mean(x)
   
   mean_y <- mean(y)
   
+  
+  # ============================================================================
+  # Pearson
+  # ============================================================================
+  
+  if (
+    sd(x) == 0 ||
+    sd(y) == 0
+  ) {
+    
+    r_pearson <- NA_real_
+    
+  } else {
+    
+    r_pearson <- cor(
+      x,
+      y,
+      method = "pearson"
+    )
+  }
+  
+  
+  # ============================================================================
+  # REGRESIÓN OLS
+  # ============================================================================
+  
+  if (
+    sd(x) == 0
+  ) {
+    
+    r2 <- NA_real_
+    
+  } else {
+    
+    fit <- lm(
+      y ~ x
+    )
+    
+    r2 <- summary(fit)$r.squared
+  }
+  
+  
+  # ============================================================================
+  # CCC DE LIN
+  #
+  # CCC = 2 * cov(x,y) /
+  #       [var(x) + var(y) + (mean(x)-mean(y))^2]
+  # ============================================================================
+  
   var_x <- var(x)
   
   var_y <- var(y)
   
-  ccc <-
-    (
-      2 *
-        r_pearson *
-        sd(x) *
-        sd(y)
-    ) /
-    (
-      var_x +
-        var_y +
-        (mean_x - mean_y)^2
-    )
+  cov_xy <- cov(
+    x,
+    y
+  )
+  
+  denominador_ccc <-
+    var_x +
+    var_y +
+    (mean_x - mean_y)^2
+  
+  if (
+    denominador_ccc == 0
+  ) {
+    
+    ccc <- NA_real_
+    
+  } else {
+    
+    ccc <-
+      2 * cov_xy /
+      denominador_ccc
+  }
   
   
   # ============================================================================
@@ -462,6 +488,8 @@ calc_metrics <- function(
     
     Parametro = label,
     
+    N = length(x),
+    
     Media_Cetam =
       mean_x,
     
@@ -470,6 +498,9 @@ calc_metrics <- function(
     
     Pearson =
       r_pearson,
+    
+    R2 =
+      r2,
     
     CCC_Lin =
       ccc,
@@ -542,15 +573,6 @@ print(resumen)
 
 # ==============================================================================
 # 12. SERIE DE TIEMPO INTERACTIVA
-#
-# Características:
-#
-#   - Rangeslider debajo del gráfico
-#   - Selección temporal
-#   - Botones 1 día / 1 semana / 1 mes / Todo
-#   - Autoescala dinámica del eje Y
-#   - Zoom manual
-#   - Hover unificado
 # ==============================================================================
 
 
@@ -582,177 +604,146 @@ plot_ts <- function(
     
   ) %>%
     
-    # ------------------------------------------------------------------------
-  # Cetam
-  # ------------------------------------------------------------------------
-  
-  add_lines(
-    
-    y = y_cetam,
-    
-    name =
-      paste(
-        "Cetam",
-        poll
-      ),
-    
-    line = list(
+    add_lines(
       
-      color = "#1f77b4",
+      y = y_cetam,
       
-      width = 1
-      
-    )
-    
-  ) %>%
-    
-    # ------------------------------------------------------------------------
-  # MT
-  # ------------------------------------------------------------------------
-  
-  add_lines(
-    
-    y = y_mt,
-    
-    name =
-      paste(
-        "MT",
-        poll
-      ),
-    
-    line = list(
-      
-      color = "#ff7f0e",
-      
-      width = 1
-      
-    )
-    
-  ) %>%
-    
-    # ------------------------------------------------------------------------
-  # Layout
-  # ------------------------------------------------------------------------
-  
-  layout(
-    
-    title = list(
-      
-      text =
+      name =
         paste(
-          "Serie de Tiempo Limpia -",
+          "Cetam",
           poll
-        )
+        ),
       
-    ),
-    
-    # ----------------------------------------------------------------------
-    # Eje X
-    # ----------------------------------------------------------------------
-    
-    xaxis = list(
-      
-      title = "Fecha",
-      
-      type = "date",
-      
-      # Selector visual debajo del gráfico
-      rangeslider = list(
+      line = list(
         
-        visible = TRUE,
+        color = "#1f77b4",
         
-        thickness = 0.10
+        width = 1
+        
+      )
+      
+    ) %>%
+    
+    add_lines(
+      
+      y = y_mt,
+      
+      name =
+        paste(
+          "MT",
+          poll
+        ),
+      
+      line = list(
+        
+        color = "#ff7f0e",
+        
+        width = 1
+        
+      )
+      
+    ) %>%
+    
+    layout(
+      
+      title = list(
+        
+        text =
+          paste(
+            "Serie de Tiempo Limpia -",
+            poll
+          )
         
       ),
       
-      # Botones de selección temporal
-      rangeselector = list(
+      xaxis = list(
         
-        buttons = list(
+        title = "Fecha",
+        
+        type = "date",
+        
+        rangeslider = list(
           
-          list(
-            
-            count = 1,
-            
-            label = "1 día",
-            
-            step = "day",
-            
-            stepmode = "backward"
-            
-          ),
+          visible = TRUE,
           
-          list(
-            
-            count = 7,
-            
-            label = "1 semana",
-            
-            step = "day",
-            
-            stepmode = "backward"
-            
-          ),
+          thickness = 0.10
           
-          list(
-            
-            count = 1,
-            
-            label = "1 mes",
-            
-            step = "month",
-            
-            stepmode = "backward"
-            
-          ),
+        ),
+        
+        rangeselector = list(
           
-          list(
+          buttons = list(
             
-            step = "all",
+            list(
+              
+              count = 1,
+              
+              label = "1 día",
+              
+              step = "day",
+              
+              stepmode = "backward"
+              
+            ),
             
-            label = "Todo"
+            list(
+              
+              count = 7,
+              
+              label = "1 semana",
+              
+              step = "day",
+              
+              stepmode = "backward"
+              
+            ),
+            
+            list(
+              
+              count = 1,
+              
+              label = "1 mes",
+              
+              step = "month",
+              
+              stepmode = "backward"
+              
+            ),
+            
+            list(
+              
+              step = "all",
+              
+              label = "Todo"
+              
+            )
             
           )
           
         )
         
-      )
+      ),
       
-    ),
-    
-    # ----------------------------------------------------------------------
-    # Eje Y
-    # ----------------------------------------------------------------------
-    
-    yaxis = list(
+      yaxis = list(
+        
+        title = "µg/m³",
+        
+        autorange = TRUE,
+        
+        fixedrange = FALSE
+        
+      ),
       
-      title = "µg/m³",
+      dragmode = "zoom",
       
-      autorange = TRUE,
+      hovermode = "x unified"
       
-      fixedrange = FALSE
-      
-    ),
-    
-    dragmode = "zoom",
-    
-    hovermode = "x unified"
-    
-  )
+    )
   
   
-  # ==========================================================================
-  # JAVASCRIPT PARA AUTOESCALADO DEL EJE Y
-  #
-  # Cada vez que el usuario modifica el intervalo temporal:
-  #
-  #   1. Se obtiene el nuevo rango de X.
-  #   2. Se buscan los datos dentro de ese rango.
-  #   3. Se obtiene min(Y) y max(Y).
-  #   4. Se agrega 5% de margen.
-  #   5. Se actualiza automáticamente el eje Y.
-  # ==========================================================================
-  
+  # ============================================================================
+  # JAVASCRIPT - AUTOESCALADO DEL EJE Y
+  # ============================================================================
   
   p <- htmlwidgets::onRender(
     
@@ -766,10 +757,6 @@ plot_ts <- function(
       plot.on(
         'plotly_relayout',
         function(eventdata) {
-
-          // --------------------------------------------------------------
-          // Detectar modificaciones del eje X
-          // --------------------------------------------------------------
 
           if (
 
@@ -788,31 +775,20 @@ plot_ts <- function(
               eventdata['xaxis.range[1]'];
 
 
-            // ------------------------------------------------------------
-            // Si se seleccionó 'Todo'
-            // ------------------------------------------------------------
-
             if (
               eventdata['xaxis.autorange'] === true
             ) {
 
               Plotly.relayout(
-
                 plot,
-
                 {
                   'yaxis.autorange': true
                 }
-
               );
 
               return;
             }
 
-
-            // ------------------------------------------------------------
-            // Ambos extremos son necesarios
-            // ------------------------------------------------------------
 
             if (
               x0 === undefined ||
@@ -824,10 +800,6 @@ plot_ts <- function(
             }
 
 
-            // ------------------------------------------------------------
-            // Convertir fechas a milisegundos
-            // ------------------------------------------------------------
-
             var xmin =
               new Date(x0).getTime();
 
@@ -835,19 +807,10 @@ plot_ts <- function(
               new Date(x1).getTime();
 
 
-            // ------------------------------------------------------------
-            // Vector para guardar valores visibles
-            // ------------------------------------------------------------
-
             var valores = [];
 
 
-            // ------------------------------------------------------------
-            // Recorrer las series
-            // ------------------------------------------------------------
-
             plot.data.forEach(
-
               function(trace) {
 
                 if (
@@ -869,10 +832,6 @@ plot_ts <- function(
                     var yi =
                       trace.y[i];
 
-
-                    // --------------------------------------------------
-                    // Conservar solamente datos visibles y válidos
-                    // --------------------------------------------------
 
                     if (
 
@@ -897,13 +856,8 @@ plot_ts <- function(
                 }
 
               }
-
             );
 
-
-            // ------------------------------------------------------------
-            // Si existen datos visibles
-            // ------------------------------------------------------------
 
             if (
               valores.length > 0
@@ -922,17 +876,12 @@ plot_ts <- function(
                 );
 
 
-              // ----------------------------------------------------------
-              // Caso de serie constante
-              // ----------------------------------------------------------
-
               if (
                 ymin === ymax
               ) {
 
                 var margen =
                   Math.abs(ymin) * 0.05;
-
 
                 if (
                   margen === 0
@@ -942,19 +891,11 @@ plot_ts <- function(
 
                 }
 
-
                 ymin -= margen;
 
                 ymax += margen;
 
-              }
-
-
-              // ----------------------------------------------------------
-              // Caso normal
-              // ----------------------------------------------------------
-
-              else {
+              } else {
 
                 var margen =
                   (ymax - ymin) * 0.05;
@@ -965,10 +906,6 @@ plot_ts <- function(
 
               }
 
-
-              // ----------------------------------------------------------
-              // Actualizar eje Y
-              // ----------------------------------------------------------
 
               Plotly.relayout(
 
@@ -1015,10 +952,6 @@ plot_ba <- function(
     m_col
 ) {
   
-  # --------------------------------------------------------------------------
-  # Crear tabla con pares válidos
-  # --------------------------------------------------------------------------
-  
   datos <- tibble(
     
     x = df[[c_col]],
@@ -1037,7 +970,28 @@ plot_ba <- function(
   
   
   # --------------------------------------------------------------------------
-  # Media de ambos equipos
+  # Datos insuficientes
+  # --------------------------------------------------------------------------
+  
+  if (
+    nrow(datos) < 2
+  ) {
+    
+    return(
+      plot_ly() %>%
+        layout(
+          title =
+            paste(
+              "Datos insuficientes -",
+              poll
+            )
+        )
+    )
+  }
+  
+  
+  # --------------------------------------------------------------------------
+  # Media y diferencia
   # --------------------------------------------------------------------------
   
   media_xy <-
@@ -1045,11 +999,6 @@ plot_ba <- function(
       datos$x +
         datos$y
     ) / 2
-  
-  
-  # --------------------------------------------------------------------------
-  # Diferencia
-  # --------------------------------------------------------------------------
   
   diferencia <-
     datos$y -
@@ -1061,14 +1010,10 @@ plot_ba <- function(
   # --------------------------------------------------------------------------
   
   bias <-
-    mean(
-      diferencia
-    )
+    mean(diferencia)
   
   sd_diff <-
-    sd(
-      diferencia
-    )
+    sd(diferencia)
   
   loa_u <-
     bias +
@@ -1078,10 +1023,6 @@ plot_ba <- function(
     bias -
     1.96 * sd_diff
   
-  
-  # --------------------------------------------------------------------------
-  # Rango X
-  # --------------------------------------------------------------------------
   
   rango_x <-
     range(
@@ -1117,83 +1058,71 @@ plot_ba <- function(
     
   ) %>%
     
-    # ------------------------------------------------------------------------
-  # Sesgo
-  # ------------------------------------------------------------------------
-  
-  add_lines(
-    
-    x = rango_x,
-    
-    y = c(
-      bias,
-      bias
-    ),
-    
-    name =
-      "Sesgo (Media)",
-    
-    line = list(
+    add_lines(
       
-      color = "red",
+      x = rango_x,
       
-      width = 2
+      y = c(
+        bias,
+        bias
+      ),
       
-    )
-    
-  ) %>%
-    
-    # ------------------------------------------------------------------------
-  # Límite superior
-  # ------------------------------------------------------------------------
-  
-  add_lines(
-    
-    x = rango_x,
-    
-    y = c(
-      loa_u,
-      loa_u
-    ),
-    
-    name =
-      "Límite Sup (+1.96 SD)",
-    
-    line = list(
+      name =
+        "Sesgo (Media)",
       
-      color = "blue",
+      line = list(
+        
+        color = "red",
+        
+        width = 2
+        
+      )
       
-      dash = "dash"
+    ) %>%
+    
+    add_lines(
       
-    )
-    
-  ) %>%
-    
-    # ------------------------------------------------------------------------
-  # Límite inferior
-  # ------------------------------------------------------------------------
-  
-  add_lines(
-    
-    x = rango_x,
-    
-    y = c(
-      loa_l,
-      loa_l
-    ),
-    
-    name =
-      "Límite Inf (-1.96 SD)",
-    
-    line = list(
+      x = rango_x,
       
-      color = "blue",
+      y = c(
+        loa_u,
+        loa_u
+      ),
       
-      dash = "dash"
+      name =
+        "Límite Sup (+1.96 SD)",
       
-    )
+      line = list(
+        
+        color = "blue",
+        
+        dash = "dash"
+        
+      )
+      
+    ) %>%
     
-  ) %>%
+    add_lines(
+      
+      x = rango_x,
+      
+      y = c(
+        loa_l,
+        loa_l
+      ),
+      
+      name =
+        "Límite Inf (-1.96 SD)",
+      
+      line = list(
+        
+        color = "blue",
+        
+        dash = "dash"
+        
+      )
+      
+    ) %>%
     
     layout(
       
@@ -1226,200 +1155,761 @@ plot_ba <- function(
 # ==============================================================================
 
 
-plot_scatter_limpio <- function(df, poll, c_col, m_col) {
+plot_scatter_limpio <- function(
+    df,
+    poll,
+    c_col,
+    m_col
+) {
   
-  # ------------------------------------------------------------
-  # 1. Seleccionar datos válidos
-  # ------------------------------------------------------------
+  # --------------------------------------------------------------------------
+  # Seleccionar pares válidos
+  # --------------------------------------------------------------------------
   
   datos <- data.frame(
+    
     Cetam = df[[c_col]],
+    
     MT = df[[m_col]]
+    
   ) %>%
+    
     filter(
+      
       is.finite(Cetam),
+      
       is.finite(MT)
+      
     )
   
-  # Verificar que existan suficientes datos
-  if (nrow(datos) < 2) {
+  
+  # --------------------------------------------------------------------------
+  # Verificar datos suficientes
+  # --------------------------------------------------------------------------
+  
+  if (
+    nrow(datos) < 2
+  ) {
+    
     return(
       plot_ly() %>%
         layout(
-          title = paste("Datos insuficientes -", poll)
+          title =
+            paste(
+              "Datos insuficientes -",
+              poll
+            )
         )
     )
   }
   
-  # ------------------------------------------------------------
-  # 2. Regresión lineal
-  # ------------------------------------------------------------
   
-  fit <- lm(MT ~ Cetam, data = datos)
+  # --------------------------------------------------------------------------
+  # Regresión lineal
+  # --------------------------------------------------------------------------
   
-  pendiente <- coef(fit)[2]
-  intercepto <- coef(fit)[1]
+  fit <-
+    lm(
+      MT ~ Cetam,
+      data = datos
+    )
   
-  r <- cor(
-    datos$Cetam,
-    datos$MT,
-    method = "pearson"
-  )
   
-  r2 <- summary(fit)$r.squared
+  pendiente <-
+    coef(fit)[2]
   
-  n <- nrow(datos)
+  intercepto <-
+    coef(fit)[1]
   
-  # ------------------------------------------------------------
-  # 3. Ecuación de la recta
-  # ------------------------------------------------------------
+  
+  # --------------------------------------------------------------------------
+  # Pearson
+  # --------------------------------------------------------------------------
+  
+  if (
+    sd(datos$Cetam) == 0 ||
+    sd(datos$MT) == 0
+  ) {
+    
+    r <- NA_real_
+    
+  } else {
+    
+    r <-
+      cor(
+        datos$Cetam,
+        datos$MT,
+        method = "pearson"
+      )
+  }
+  
+  
+  # --------------------------------------------------------------------------
+  # R²
+  # --------------------------------------------------------------------------
+  
+  r2 <-
+    summary(fit)$r.squared
+  
+  
+  # --------------------------------------------------------------------------
+  # CCC de Lin
+  # --------------------------------------------------------------------------
+  
+  mean_c <-
+    mean(datos$Cetam)
+  
+  mean_m <-
+    mean(datos$MT)
+  
+  var_c <-
+    var(datos$Cetam)
+  
+  var_m <-
+    var(datos$MT)
+  
+  cov_cm <-
+    cov(
+      datos$Cetam,
+      datos$MT
+    )
+  
+  denominador_ccc <-
+    var_c +
+    var_m +
+    (mean_c - mean_m)^2
+  
+  if (
+    denominador_ccc == 0
+  ) {
+    
+    ccc <- NA_real_
+    
+  } else {
+    
+    ccc <-
+      2 * cov_cm /
+      denominador_ccc
+  }
+  
+  
+  # --------------------------------------------------------------------------
+  # n
+  # --------------------------------------------------------------------------
+  
+  n <-
+    nrow(datos)
+  
+  
+  # --------------------------------------------------------------------------
+  # Ecuación
+  # --------------------------------------------------------------------------
   
   ecuacion <- paste0(
+    
     "y = ",
-    round(pendiente, 3),
+    
+    round(
+      pendiente,
+      3
+    ),
+    
     "x ",
-    ifelse(intercepto >= 0, "+ ", "- "),
-    round(abs(intercepto), 3)
+    
+    ifelse(
+      intercepto >= 0,
+      "+ ",
+      "- "
+    ),
+    
+    round(
+      abs(intercepto),
+      3
+    )
+    
   )
   
-  # ------------------------------------------------------------
-  # 4. Valores para dibujar la regresión
-  # ------------------------------------------------------------
+  
+  # --------------------------------------------------------------------------
+  # Valores para regresión
+  # --------------------------------------------------------------------------
   
   x_reg <- seq(
-    min(datos$Cetam),
-    max(datos$Cetam),
+    
+    min(
+      datos$Cetam
+    ),
+    
+    max(
+      datos$Cetam
+    ),
+    
     length.out = 100
+    
   )
   
-  y_reg <- predict(
-    fit,
-    newdata = data.frame(Cetam = x_reg)
-  )
   
-  # ------------------------------------------------------------
-  # 5. Límites para la línea y = x
-  # ------------------------------------------------------------
+  y_reg <-
+    predict(
+      
+      fit,
+      
+      newdata =
+        data.frame(
+          Cetam = x_reg
+        )
+      
+    )
+  
+  
+  # --------------------------------------------------------------------------
+  # Línea y = x
+  # --------------------------------------------------------------------------
   
   limite <- max(
+    
     datos$Cetam,
+    
     datos$MT,
+    
     na.rm = TRUE
+    
   )
   
-  # ------------------------------------------------------------
-  # 6. Crear gráfico
-  # ------------------------------------------------------------
+  
+  # --------------------------------------------------------------------------
+  # Gráfico
+  # --------------------------------------------------------------------------
   
   p <- plot_ly() %>%
     
-    # Puntos
     add_markers(
+      
       x = datos$Cetam,
+      
       y = datos$MT,
+      
       name = "Mediciones",
+      
       marker = list(
+        
         size = 5,
+        
         opacity = 0.6
+        
       ),
-      hovertemplate =
-        paste(
-          "Cetam: %{x:.2f} µg/m³",
-          "<br>MT: %{y:.2f} µg/m³",
-          "<extra></extra>"
-        )
+      
+      hovertemplate = paste(
+        
+        "Cetam: %{x:.2f} µg/m³",
+        
+        "<br>MT: %{y:.2f} µg/m³",
+        
+        "<extra></extra>"
+        
+      )
+      
     ) %>%
     
-    # Recta de regresión
     add_lines(
+      
       x = x_reg,
+      
       y = y_reg,
+      
       name = "Regresión OLS",
+      
       line = list(
+        
         width = 2
+        
       )
+      
     ) %>%
     
-    # Línea de identidad y = x
     add_lines(
-      x = c(0, limite),
-      y = c(0, limite),
+      
+      x = c(
+        0,
+        limite
+      ),
+      
+      y = c(
+        0,
+        limite
+      ),
+      
       name = "y = x",
+      
       line = list(
+        
         dash = "dash",
+        
         width = 2
+        
       )
+      
     ) %>%
     
-    # ----------------------------------------------------------
-  # 7. Layout
-  # ----------------------------------------------------------
-  
-  layout(
-    
-    title = list(
-      text = paste(
-        "Comparación Cetam vs MT -",
-        poll
+    layout(
+      
+      title = list(
+        
+        text = paste(
+          
+          "Comparación Cetam vs MT -",
+          
+          poll
+          
+        )
+        
+      ),
+      
+      xaxis = list(
+        
+        title =
+          "Cetam (µg/m³)",
+        
+        zeroline = FALSE
+        
+      ),
+      
+      yaxis = list(
+        
+        title =
+          "MT (µg/m³)",
+        
+        zeroline = FALSE
+        
+      ),
+      
+      hovermode = "closest",
+      
+      annotations = list(
+        
+        list(
+          
+          x = 0.02,
+          
+          y = 0.98,
+          
+          xref = "paper",
+          
+          yref = "paper",
+          
+          xanchor = "left",
+          
+          yanchor = "top",
+          
+          text = paste0(
+            
+            "<b>Pearson r:</b> ",
+            round(
+              r,
+              4
+            ),
+            
+            "<br><b>R²:</b> ",
+            round(
+              r2,
+              4
+            ),
+            
+            "<br><b>CCC Lin:</b> ",
+            round(
+              ccc,
+              4
+            ),
+            
+            "<br><b>",
+            ecuacion,
+            "</b>",
+            
+            "<br><b>n:</b> ",
+            n
+            
+          ),
+          
+          showarrow = FALSE,
+          
+          align = "left",
+          
+          bgcolor =
+            "rgba(255,255,255,0.85)",
+          
+          bordercolor = "black",
+          
+          borderwidth = 1,
+          
+          borderpad = 6
+          
+        )
+        
       )
-    ),
-    
-    xaxis = list(
-      title = "Cetam (µg/m³)",
-      zeroline = FALSE
-    ),
-    
-    yaxis = list(
-      title = "MT (µg/m³)",
-      zeroline = FALSE
-    ),
-    
-    hovermode = "closest",
-    
-    # --------------------------------------------------------
-    # 8. Información estadística dentro del gráfico
-    # --------------------------------------------------------
-    
-    annotations = list(
-      list(
-        x = 0.02,
-        y = 0.98,
-        xref = "paper",
-        yref = "paper",
-        xanchor = "left",
-        yanchor = "top",
-        
-        text = paste0(
-          "<b>Pearson r:</b> ", round(r, 4),
-          "<br><b>R²:</b> ", round(r2, 4),
-          "<br><b>", ecuacion, "</b>",
-          "<br><b>n:</b> ", n
-        ),
-        
-        showarrow = FALSE,
-        
-        align = "left",
-        
-        bgcolor = "rgba(255,255,255,0.85)",
-        
-        bordercolor = "black",
-        
-        borderwidth = 1,
-        
-        borderpad = 6
-      )
+      
     )
-  )
+  
   
   return(p)
 }
 
+
 # ==============================================================================
-# 15. GENERAR GRÁFICOS DE DISPERSIÓN
+# 15. PROBABILITY OF AGREEMENT
+#
+# Se calcula:
+#
+#       P(|MT - Cetam| <= tolerancia)
+#
+# Para cada tolerancia posible.
+#
+# Ejemplo:
+#
+#       Si P = 0.90 en tolerancia = 10,
+#
+#       significa que el 90% de los pares tienen una diferencia
+#       absoluta menor o igual a 10 µg/m³.
 # ==============================================================================
 
 
-saveWidget(
+plot_probability_agreement <- function(
+    df,
+    poll,
+    c_col,
+    m_col
+) {
+  
+  # --------------------------------------------------------------------------
+  # Seleccionar pares válidos
+  # --------------------------------------------------------------------------
+  
+  datos <- data.frame(
+    
+    Cetam = df[[c_col]],
+    
+    MT = df[[m_col]]
+    
+  ) %>%
+    
+    filter(
+      
+      is.finite(Cetam),
+      
+      is.finite(MT)
+      
+    )
+  
+  
+  # --------------------------------------------------------------------------
+  # Verificar datos suficientes
+  # --------------------------------------------------------------------------
+  
+  if (
+    nrow(datos) < 2
+  ) {
+    
+    return(
+      plot_ly() %>%
+        layout(
+          title =
+            paste(
+              "Datos insuficientes -",
+              poll
+            )
+        )
+    )
+  }
+  
+  
+  # --------------------------------------------------------------------------
+  # Diferencia absoluta
+  # --------------------------------------------------------------------------
+  
+  datos <- datos %>%
+    
+    mutate(
+      
+      diferencia =
+        abs(
+          MT - Cetam
+        )
+      
+    )
+  
+  
+  # --------------------------------------------------------------------------
+  # Máxima tolerancia mostrada
+  #
+  # Se utiliza el percentil 99 para evitar que unos pocos valores
+  # extremos compriman visualmente el gráfico.
+  # --------------------------------------------------------------------------
+  
+  tolerancia_max <-
+    as.numeric(
+      quantile(
+        datos$diferencia,
+        0.99,
+        na.rm = TRUE
+      )
+    )
+  
+  
+  # Evitar un rango cero
+  
+  if (
+    tolerancia_max <= 0 ||
+    !is.finite(tolerancia_max)
+  ) {
+    
+    tolerancia_max <- 1
+    
+  }
+  
+  
+  # --------------------------------------------------------------------------
+  # Tolerancias
+  # --------------------------------------------------------------------------
+  
+  tolerancias <- seq(
+    
+    0,
+    
+    tolerancia_max,
+    
+    length.out = 200
+    
+  )
+  
+  
+  # --------------------------------------------------------------------------
+  # Probability of Agreement
+  # --------------------------------------------------------------------------
+  
+  prob_agreement <- sapply(
+    
+    tolerancias,
+    
+    function(tol) {
+      
+      mean(
+        datos$diferencia <= tol
+      )
+      
+    }
+    
+  )
+  
+  
+  datos_poa <- data.frame(
+    
+    tolerancia =
+      tolerancias,
+    
+    probabilidad =
+      prob_agreement
+    
+  )
+  
+  
+  # --------------------------------------------------------------------------
+  # Crear gráfico
+  # --------------------------------------------------------------------------
+  
+  p <- plot_ly(
+    
+    datos_poa,
+    
+    x = ~tolerancia,
+    
+    y = ~probabilidad,
+    
+    type = "scatter",
+    
+    mode = "lines",
+    
+    line = list(
+      
+      width = 3
+      
+    ),
+    
+    name = "Probability of Agreement",
+    
+    hovertemplate = paste(
+      
+      "Tolerancia: %{x:.2f} µg/m³",
+      
+      "<br>Probabilidad: %{y:.2%}",
+      
+      "<extra></extra>"
+      
+    )
+    
+  ) %>%
+    
+    # ------------------------------------------------------------------------
+  # 50 %
+  # ------------------------------------------------------------------------
+  
+  add_lines(
+    
+    x = c(
+      0,
+      tolerancia_max
+    ),
+    
+    y = c(
+      0.50,
+      0.50
+    ),
+    
+    name = "50 %",
+    
+    line = list(
+      
+      dash = "dash"
+      
+    ),
+    
+    hoverinfo = "skip"
+    
+  ) %>%
+    
+    # ------------------------------------------------------------------------
+  # 90 %
+  # ------------------------------------------------------------------------
+  
+  add_lines(
+    
+    x = c(
+      0,
+      tolerancia_max
+    ),
+    
+    y = c(
+      0.90,
+      0.90
+    ),
+    
+    name = "90 %",
+    
+    line = list(
+      
+      dash = "dash"
+      
+    ),
+    
+    hoverinfo = "skip"
+    
+  ) %>%
+    
+    # ------------------------------------------------------------------------
+  # 95 %
+  # ------------------------------------------------------------------------
+  
+  add_lines(
+    
+    x = c(
+      0,
+      tolerancia_max
+    ),
+    
+    y = c(
+      0.95,
+      0.95
+    ),
+    
+    name = "95 %",
+    
+    line = list(
+      
+      dash = "dash"
+      
+    ),
+    
+    hoverinfo = "skip"
+    
+  ) %>%
+    
+    layout(
+      
+      title = list(
+        
+        text = paste(
+          
+          "Probability of Agreement -",
+          
+          poll
+          
+        )
+        
+      ),
+      
+      xaxis = list(
+        
+        title =
+          "Tolerancia absoluta |MT - Cetam| (µg/m³)"
+        
+      ),
+      
+      yaxis = list(
+        
+        title =
+          "Probabilidad de acuerdo",
+        
+        tickformat = ".0%",
+        
+        range =
+          c(
+            0,
+            1
+          )
+        
+      ),
+      
+      hovermode =
+        "x unified"
+      
+    )
+  
+  
+  return(p)
+}
+
+
+# ==============================================================================
+# 16. FUNCIÓN PARA GUARDAR GRÁFICOS
+#
+# Evita repetir htmlwidgets::saveWidget() muchas veces.
+# ==============================================================================
+
+
+guardar_grafico <- function(
+    grafico,
+    nombre
+) {
+  
+  htmlwidgets::saveWidget(
+    
+    grafico,
+    
+    file.path(
+      output_dir,
+      nombre
+    ),
+    
+    selfcontained = TRUE
+    
+  )
+}
+
+
+# ==============================================================================
+# 17. GENERAR GRÁFICOS DE DISPERSIÓN
+# ==============================================================================
+
+
+guardar_grafico(
   
   plot_scatter_limpio(
     
@@ -1433,18 +1923,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "Scatter_PM1_Limpio.html"
-    
-  )
+  "Scatter_PM1_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_scatter_limpio(
     
@@ -1458,18 +1942,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "Scatter_PM25_Limpio.html"
-    
-  )
+  "Scatter_PM25_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_scatter_limpio(
     
@@ -1483,23 +1961,17 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "Scatter_PM10_Limpio.html"
-    
-  )
+  "Scatter_PM10_Limpio.html"
   
 )
 
 
 # ==============================================================================
-# 16. GENERAR SERIES TEMPORALES
+# 18. GENERAR SERIES TEMPORALES
 # ==============================================================================
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ts(
     
@@ -1513,18 +1985,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "TS_PM1_Limpio.html"
-    
-  )
+  "TS_PM1_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ts(
     
@@ -1538,18 +2004,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "TS_PM25_Limpio.html"
-    
-  )
+  "TS_PM25_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ts(
     
@@ -1563,23 +2023,17 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "TS_PM10_Limpio.html"
-    
-  )
+  "TS_PM10_Limpio.html"
   
 )
 
 
 # ==============================================================================
-# 17. GENERAR BLAND-ALTMAN
+# 19. GENERAR BLAND-ALTMAN
 # ==============================================================================
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ba(
     
@@ -1593,18 +2047,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "BlandAltman_PM1_Limpio.html"
-    
-  )
+  "BlandAltman_PM1_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ba(
     
@@ -1618,18 +2066,12 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "BlandAltman_PM25_Limpio.html"
-    
-  )
+  "BlandAltman_PM25_Limpio.html"
   
 )
 
 
-saveWidget(
+guardar_grafico(
   
   plot_ba(
     
@@ -1643,27 +2085,120 @@ saveWidget(
     
   ),
   
-  file.path(
-    
-    output_dir,
-    
-    "BlandAltman_PM10_Limpio.html"
-    
-  )
+  "BlandAltman_PM10_Limpio.html"
   
 )
 
 
 # ==============================================================================
-# FIN DEL SCRIPT
+# 20. GENERAR PROBABILITY OF AGREEMENT
 # ==============================================================================
+
+
+guardar_grafico(
+  
+  plot_probability_agreement(
+    
+    df_merged,
+    
+    "PM1",
+    
+    "PM1_C",
+    
+    "PM1_M"
+    
+  ),
+  
+  "Probability_of_Agreement_PM1.html"
+  
+)
+
+
+guardar_grafico(
+  
+  plot_probability_agreement(
+    
+    df_merged,
+    
+    "PM2.5",
+    
+    "PM25_C",
+    
+    "PM25_M"
+    
+  ),
+  
+  "Probability_of_Agreement_PM25.html"
+  
+)
+
+
+guardar_grafico(
+  
+  plot_probability_agreement(
+    
+    df_merged,
+    
+    "PM10",
+    
+    "PM10_C",
+    
+    "PM10_M"
+    
+  ),
+  
+  "Probability_of_Agreement_PM10.html"
+  
+)
+
+
+# ==============================================================================
+# 21. FIN DEL SCRIPT
+# ==============================================================================
+
 
 cat(
+  
   "\n============================================================\n",
+  
   "ANÁLISIS GRIMM FINALIZADO\n",
+  
   "============================================================\n",
+  
   "Resultados guardados en:\n",
+  
   output_dir,
-  "\n============================================================\n"
+  
+  "\n\n",
+  
+  "Archivos generados:\n",
+  
+  "  - Metricas_Avanzadas_SinOutliers.csv\n",
+  
+  "  - Scatter_PM1_Limpio.html\n",
+  
+  "  - Scatter_PM25_Limpio.html\n",
+  
+  "  - Scatter_PM10_Limpio.html\n",
+  
+  "  - TS_PM1_Limpio.html\n",
+  
+  "  - TS_PM25_Limpio.html\n",
+  
+  "  - TS_PM10_Limpio.html\n",
+  
+  "  - BlandAltman_PM1_Limpio.html\n",
+  
+  "  - BlandAltman_PM25_Limpio.html\n",
+  
+  "  - BlandAltman_PM10_Limpio.html\n",
+  
+  "  - Probability_of_Agreement_PM1.html\n",
+  
+  "  - Probability_of_Agreement_PM25.html\n",
+  
+  "  - Probability_of_Agreement_PM10.html\n",
+  
+  "============================================================\n"
+  
 )
-
