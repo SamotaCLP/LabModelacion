@@ -450,3 +450,61 @@ lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$NO_norm,
 legend("topright", legend = c("Sin Sonda (CSV)", "Con Sonda (DAT)"), 
        col = c("blue", "red"), lty = 1, lwd = 2, cex = 0.8)
 
+
+
+# ==========================================
+# SECCIÓN 11: ANÁLISIS ESTADÍSTICO (NO y NOx)
+# ==========================================
+
+# 1. Alinear las bases de datos para NO y NOx simultáneamente
+datos_alineados <- merge(
+  x = iQ_sinsonda_datos_periodo[, c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")],
+  y = i_sonda_datos_periodo[, c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")],
+  by = "Fecha_y_Hora",
+  suffixes = c("_SinSonda", "_ConSonda")
+)
+
+# 2. Modelos de Regresión Lineal (Con Sonda en función de Sin Sonda)
+modelo_NO <- lm(Concentracion_NO_ConSonda ~ Concentracion_NO_SinSonda, data = datos_alineados)
+modelo_NOx <- lm(Concentracion_NOx_ConSonda ~ Concentracion_NOx_SinSonda, data = datos_alineados)
+
+# Extraer coeficientes y formatear las ecuaciones de la recta (y = mx + b)
+coef_NO <- coef(modelo_NO)
+ecuacion_NO <- sprintf("y = %.4fx %s %.4f", coef_NO[2], ifelse(coef_NO[1] >= 0, "+", "-"), abs(coef_NO[1]))
+
+coef_NOx <- coef(modelo_NOx)
+ecuacion_NOx <- sprintf("y = %.4fx %s %.4f", coef_NOx[2], ifelse(coef_NOx[1] >= 0, "+", "-"), abs(coef_NOx[1]))
+
+# Calcular correlaciones de Pearson
+cor_NO <- cor(datos_alineados$Concentracion_NO_SinSonda, datos_alineados$Concentracion_NO_ConSonda, use = "complete.obs")
+cor_NOx <- cor(datos_alineados$Concentracion_NOx_SinSonda, datos_alineados$Concentracion_NOx_ConSonda, use = "complete.obs")
+
+cat(sprintf("Correlación Pearson NO : %.3f\n", cor_NO))
+cat(sprintf("Correlación Pearson NOx: %.3f\n", cor_NOx))
+
+# 3. Configurar la ventana gráfica para mostrar 2 gráficos lado a lado (1 fila, 2 columnas)
+par(mfrow = c(1, 2))
+
+# 4. Gráfico de dispersión para NO
+plot(x = datos_alineados$Concentracion_NO_SinSonda, 
+     y = datos_alineados$Concentracion_NO_ConSonda,
+     pch = 16, col = adjustcolor("purple", alpha.f = 0.3),
+     main = paste("NO (r =", round(cor_NO, 3), ")"),
+     xlab = "NO Sin Sonda", ylab = "NO Con Sonda")
+abline(modelo_NO, col = "red", lwd = 2)
+# Añadir la ecuación en la esquina superior izquierda
+legend("topleft", legend = ecuacion_NO, text.col = "red", bty = "n", cex = 0.9)
+
+# 5. Gráfico de dispersión para NOx
+plot(x = datos_alineados$Concentracion_NOx_SinSonda, 
+     y = datos_alineados$Concentracion_NOx_ConSonda,
+     pch = 16, col = adjustcolor("darkorange", alpha.f = 0.3),
+     main = paste("NOx (r =", round(cor_NOx, 3), ")"),
+     xlab = "NOx Sin Sonda", ylab = "NOx Con Sonda")
+abline(modelo_NOx, col = "red", lwd = 2)
+# Añadir la ecuación en la esquina superior izquierda
+legend("topleft", legend = ecuacion_NOx, text.col = "red", bty = "n", cex = 0.9)
+
+# 6. Restaurar la configuración gráfica a 1 solo panel para futuros gráficos
+par(mfrow = c(1, 1))
+
