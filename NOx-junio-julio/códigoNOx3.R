@@ -1,6 +1,4 @@
-# ==========================================
-# SECCIÓN 1: DATOS SIN SONDA
-# ==========================================
+# 42iQ sin sonda ----
 
 iQ_sinsonda_archivo_julio <- "12218618650_UserData42iQ_2025-07-25_13-48-35_Sinsonda.csv"
 
@@ -58,9 +56,9 @@ cat("-------------------------------------------------------\n")
 verificar_inclusion(iQ_sinsonda_datos_junio, iQ_sinsonda_datos_totales)
 
 
-# ==========================================
-# SECCIÓN 12: DIAGNÓSTICO PROFUNDO DE NEGATIVOS (SIN SONDA)
-# ==========================================
+
+# DIAGNÓSTICO PROFUNDO DE NEGATIVOS (SIN SONDA)
+
 
 reportar_negativos_detallado <- function(df, columna) {
   # Contabilizar el total de datos en el dataframe
@@ -99,9 +97,9 @@ reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO")
 reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO2")
 reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NOx")
 
-# ==========================================
+
 # SECCIÓN 13: CORRECCIÓN JUSTIFICADA DE NEGATIVOS
-# ==========================================
+
 
 # Definimos el umbral estadístico de ruido (límite máximo aceptable)
 umbral_ruido <- -3.0
@@ -136,37 +134,6 @@ cat("NO  : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO)), " registros
 cat("NO2 : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO2)), " registros descartados.\n")
 cat("NOx : ", sum(is.na(datos_validados_sinsonda$Concentracion_NOx)), " registros descartados.\n")
 
-# ==========================================
-# SECCIÓN 14: COMPARACIÓN DE DATOS CRUDOS VS FILTRADOS (NO)
-# ==========================================
-
-# Configurar la ventana gráfica para mostrar 2 gráficos apilados (2 filas, 1 columna)
-# Ajustamos los márgenes (mar) para que los gráficos no queden tan separados
-par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
-
-# 1. Gráfico de Datos Crudos (con todos los negativos)
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, 
-     y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
-     type = "l", col = "gray50", lwd = 1.2,
-     main = "Concentración de NO: Datos Crudos (Sin Filtro)", 
-     xlab = "", ylab = "NO Crudo")
-
-# Añadir líneas de referencia para visualizar el filtro
-abline(h = 0, col = "red", lty = 2)      # Línea del cero ideal
-abline(h = -3.0, col = "darkred", lty = 3) # Línea del umbral de invalidación (-3.0)
-
-# 2. Gráfico de Datos Validados (negativos a 0, fallas a NA)
-plot(x = datos_validados_sinsonda$Fecha_y_Hora, 
-     y = datos_validados_sinsonda$Concentracion_NO, 
-     type = "l", col = "blue", lwd = 1.2,
-     main = "Concentración de NO: Datos Validados (Umbral -3.0)", 
-     xlab = "Fecha y Hora", ylab = "NO Validado")
-
-# Añadir línea de referencia en el cero
-abline(h = 0, col = "red", lty = 2)
-
-# Restaurar la configuración de la ventana gráfica a la normalidad (1 gráfico por vista)
-par(mfrow = c(1, 1))
 
 
 # EXTRACCIÓN PERIODO ESTUDIO SIN SONDA (24 JUNIO - 24 JULIO)
@@ -174,6 +141,11 @@ fecha_inicio <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
 fecha_fin <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
 
 datos_validados_sinsonda <- subset(iQ_sinsonda_datos_totales, Fecha_y_Hora >= fecha_inicio & Fecha_y_Hora <= fecha_fin)
+
+datos_validados_sinsonda$Concentracion_NO <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NO, umbral_ruido)
+datos_validados_sinsonda$Concentracion_NO2 <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NO2, umbral_ruido)
+datos_validados_sinsonda$Concentracion_NOx <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NOx, umbral_ruido)
+
 
 analizar_falla <- function(valores, limite_minutos = 3) {
   rachas <- rle(valores)
@@ -202,11 +174,7 @@ analizar_falla(iQ_sinsonda_datos_periodo$Concentracion_NOx)
 
 
 
-
-
-# ==========================================
-# SECCIÓN 2: DATOS CON SONDA
-# ==========================================
+# 42iQ con sonda ----
 
 iQ_sonda_archivo_08_14 <- "12218618650_UserData42iQ_2025-08-14_12-34-21_Sonda.csv"
 iQ_sonda_archivo_08_28 <- "12218618650_UserData42iQ_2025-08-28_23-16-34_Sonda.csv"
@@ -255,89 +223,8 @@ analizar_falla(iQ_sonda_datos_periodo$Concentracion_NOx)
 
 
 
+# Igualdad de datos en csv con y sin sonda (24/06 - 24/07) ----
 
-
-
-
-
-# ==========================================
-# SECCIÓN 3: GRÁFICOS COMPARATIVOS
-# ==========================================
-
-rango_NO  <- range(c(iQ_sinsonda_datos_periodo$Concentracion_NO, iQ_sonda_datos_periodo$Concentracion_NO), na.rm = TRUE)
-rango_NO2 <- range(c(iQ_sinsonda_datos_periodo$Concentracion_NO2, iQ_sonda_datos_periodo$Concentracion_NO2), na.rm = TRUE)
-rango_NOx <- range(c(iQ_sinsonda_datos_periodo$Concentracion_NOx, iQ_sonda_datos_periodo$Concentracion_NOx), na.rm = TRUE)
-
-color_sin_sonda <- adjustcolor("blue", alpha.f = 0.6)
-color_con_sonda <- adjustcolor("red", alpha.f = 0.6)
-
-# 1. Gráfico para NO
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
-     type = "l", col = color_sin_sonda, ylim = rango_NO, lwd = 2,
-     main = "Comparación NO (25/06 - 25/07)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NO")
-lines(x = iQ_sonda_datos_periodo$Fecha_y_Hora, y = iQ_sonda_datos_periodo$Concentracion_NO, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda", "Con Sonda"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
-
-# 2. Gráfico para NO2
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$Concentracion_NO2, 
-     type = "l", col = color_sin_sonda, ylim = rango_NO2, lwd = 2,
-     main = "Comparación NO2 (25/06 - 25/07)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NO2")
-lines(x = iQ_sonda_datos_periodo$Fecha_y_Hora, y = iQ_sonda_datos_periodo$Concentracion_NO2, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda", "Con Sonda"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
-
-# 3. Gráfico para NOx
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$Concentracion_NOx, 
-     type = "l", col = color_sin_sonda, ylim = rango_NOx, lwd = 2,
-     main = "Comparación NOx (25/06 - 25/07)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NOx")
-lines(x = iQ_sonda_datos_periodo$Fecha_y_Hora, y = iQ_sonda_datos_periodo$Concentracion_NOx, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda", "Con Sonda"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
-
-# ==========================================
-# SECCIÓN 4: GRÁFICOS INTERACTIVOS (PLOTLY)
-# ==========================================
-library(plotly)
-
-# 1. Gráfico interactivo para NO
-grafico_NO <- plot_ly() %>%
-  add_lines(x = ~iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sinsonda_datos_periodo$Concentracion_NO, 
-            name = 'Sin Sonda', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~iQ_sonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sonda_datos_periodo$Concentracion_NO, 
-            name = 'Con Sonda', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación NO (25/06 - 25/07)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NO"))
-
-# 2. Gráfico interactivo para NO2
-grafico_NO2 <- plot_ly() %>%
-  add_lines(x = ~iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sinsonda_datos_periodo$Concentracion_NO2, 
-            name = 'Sin Sonda', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~iQ_sonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sonda_datos_periodo$Concentracion_NO2, 
-            name = 'Con Sonda', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación NO2 (25/06 - 25/07)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NO2"))
-
-# 3. Gráfico interactivo para NOx
-grafico_NOx <- plot_ly() %>%
-  add_lines(x = ~iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sinsonda_datos_periodo$Concentracion_NOx, 
-            name = 'Sin Sonda', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~iQ_sonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sonda_datos_periodo$Concentracion_NOx, 
-            name = 'Con Sonda', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación NOx (25/06 - 25/07)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NOx"))
-
-# Mostrar gráficos (ejecutar uno a la vez en la consola para visualizarlos en la pestaña Viewer)
-grafico_NO
-grafico_NO2
-grafico_NOx
-
-# ==========================================
-# SECCIÓN 5: DIAGNÓSTICO DE IGUALDAD DE DATOS (24/06 - 24/07)
-# ==========================================
 
 # 1. Definir el nuevo periodo estricto de prueba
 fecha_inicio_prueba <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
@@ -368,7 +255,7 @@ if (filas_sin == filas_con && filas_sin > 0) {
   cat(sprintf("NOx: %d datos distintos.\n", dif_NOx))
   
   if (dif_NO == 0 && dif_NO2 == 0 && dif_NOx == 0) {
-    cat("\nALERTA CRÍTICA: Los datos son 100% idénticos en este periodo.\n")
+    cat("\nLos datos son 100% idénticos en este periodo.\n")
   }
 } else {
   cat("\nNota: Las bases siguen teniendo distinta cantidad de registros o no hay datos en este corte.\n")
@@ -378,24 +265,99 @@ if (filas_sin == filas_con && filas_sin > 0) {
 
 
 
+# 42i sin sonda -------------------------####################################
+
+#lectura 3 bases ----
+
+# 1. Definir los tres archivos "Sinsonda" de la carpeta
+archivos_dat_sinsonda <- c("NOx_42i_07oct_PO_Sinsonda.dat", 
+                           "NOx_42i_Portillo_14_Agosto_2025_Sinsonda.dat",
+                           "NOx_42i_Portillo_28_agosto_2025_Sinsonda.dat")
+
+# 2. Función para procesar cada archivo
+leer_y_procesar_dat_sinsonda <- function(archivo) {
+  datos_crudos <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+  datos_interes <- datos_crudos[, c("Time", "Date", "no", "nox")]
+  
+  # Formatear fecha y hora
+  datos_interes$Fecha_y_Hora <- as.POSIXct(
+    paste(datos_interes$Date, datos_interes$Time), 
+    format = "%m-%d-%y %H:%M"
+  )
+  
+  datos_final <- datos_interes[, c("Fecha_y_Hora", "no", "nox")]
+  colnames(datos_final) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
+  
+  return(datos_final)
+}
+
+# 3. Leer los archivos y unirlos en una sola base
+lista_datos_sinsonda <- lapply(archivos_dat_sinsonda, leer_y_procesar_dat_sinsonda)
+i_sinsonda_datos_totales <- do.call(rbind, lista_datos_sinsonda)
+
+# 1. CORRECCIÓN DE TRASLAPES (SOLAPAMIENTO)
+
+# Ordenar toda la base combinada cronológicamente de principio a fin
+i_sinsonda_datos_totales <- i_sinsonda_datos_totales[order(i_sinsonda_datos_totales$Fecha_y_Hora), ]
+
+# Eliminar duplicados forzando que solo exista un dato por cada Fecha_y_Hora exacta
+i_sinsonda_datos_totales <- i_sinsonda_datos_totales[!duplicated(i_sinsonda_datos_totales$Fecha_y_Hora), ]
+
+# Imprimir en consola la cantidad real de datos únicos
+cat(sprintf("Base de datos unificada y sin duplicados de tiempo: %d registros únicos.\n", nrow(i_sinsonda_datos_totales)))
 
 
-# LECTURA DE ARCHIVO .DAT
-i_sonda_archivo <- "NOx_42i_julio_Portillo_Sonda.dat"
-i_sonda_datos_crudos <- read.table(i_sonda_archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+# análisis valores constantes -----
+
+cat("\nReporte de parámetros Base .DAT Sin Sonda (Límite: 3 min)\n")
+cat("-----------------------------------------------\n")
+
+cat("NO:\n")
+analizar_falla(i_sinsonda_datos_periodo$Concentracion_NO)
+
+cat("\nNOx:\n")
+analizar_falla(i_sinsonda_datos_periodo$Concentracion_NOx)
+
+
+
+
+###############################################################################
+
+
+
+
+# 42i con sonda -------------------------####################################
+
+#lectura de los 3 archivos ----
+
+archivos_dat_sonda <- c("42i 053025 1425_Sonda.dat", 
+                        "NOx_42i_Portillo_junio_2025_Sonda.dat", 
+                        "NOx_42i_julio_Portillo_Sonda.dat")
+
+# 2. Leer y combinar los 3 archivos en un solo dataframe automáticamente
+lista_datos <- lapply(archivos_dat_sonda, function(archivo) {
+  read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+})
+i_sonda_datos_crudos <- do.call(rbind, lista_datos)
+
+# 3. Limpiar y formatear fechas
 i_sonda_datos_interes <- i_sonda_datos_crudos[, c("Time", "Date", "no", "nox")]
 i_sonda_datos_interes$Fecha_y_Hora <- as.POSIXct(
   paste(i_sonda_datos_interes$Date, i_sonda_datos_interes$Time), 
   format = "%m-%d-%y %H:%M"
 )
+
+# 4. Crear base final con columnas renombradas
 i_sonda_datos_final <- i_sonda_datos_interes[, c("Fecha_y_Hora", "no", "nox")]
 colnames(i_sonda_datos_final) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
 
+# Ordenar cronológicamente por si los archivos se cargaron desordenados
+i_sonda_datos_final <- i_sonda_datos_final[order(i_sonda_datos_final$Fecha_y_Hora), ]
 
 
-# ==========================================
-# SECCIÓN 6: ANÁLISIS DE DATOS .DAT (24 JUNIO - 24 JULIO)
-# ==========================================
+
+# extraccion de periodo ----
+
 
 # 1. Definir el periodo estricto de prueba
 fecha_inicio_dat <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
@@ -403,6 +365,25 @@ fecha_fin_dat <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
 
 # 2. Extraer los datos de este periodo
 i_sonda_datos_periodo <- subset(i_sonda_datos_final, Fecha_y_Hora >= fecha_inicio_dat & Fecha_y_Hora <= fecha_fin_dat)
+
+# 3. Cálculos de volumen de datos
+total_datos_crudos <- nrow(i_sonda_datos_final)
+total_datos_periodo <- nrow(i_sonda_datos_periodo)
+porcentaje_uso <- (total_datos_periodo / total_datos_crudos) * 100
+
+# 4. Imprimir Reporte de Conteo
+cat("\n==============================================\n")
+cat("   REPORTE DE VOLUMEN DE DATOS (.DAT CON SONDA)   \n")
+cat("==============================================\n")
+cat(sprintf("Total de registros en los 3 archivos: %d datos\n", total_datos_crudos))
+cat(sprintf("Registros en el periodo (24 Jun - 24 Jul): %d datos\n", total_datos_periodo))
+cat(sprintf("Porcentaje del total a utilizar: %.2f%%\n", porcentaje_uso))
+cat("==============================================\n\n")
+
+
+
+# Análisis de valores constantes ----
+
 
 analizar_falla <- function(valores, limite_minutos = 3) {
   valores <- na.omit(valores) 
@@ -424,8 +405,8 @@ analizar_falla <- function(valores, limite_minutos = 3) {
   }
 }
 
-# 3. Ejecutar análisis
-cat("\nReporte de parámetros Base .DAT (Límite: 3 min)\n")
+# Ejecutar análisis
+cat("Reporte de parámetros Base .DAT (Límite: 3 min)\n")
 cat("-----------------------------------------------\n")
 
 cat("NO:\n")
@@ -437,67 +418,92 @@ analizar_falla(i_sonda_datos_periodo$Concentracion_NOx)
 
 
 
-# ==========================================
-# SECCIÓN 7: GRÁFICOS COMPARATIVOS ESTÁNDAR
-# ==========================================
+
+
+###############################################################################
+
+
+# COMPARACIÓN DE PATRONES NORMALIZADOS ----
+
+#Función para normalizar entre 0 y 1
+
+normalizar <- function(x) {
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+datos_validados_sinsonda$NO_norm <- normalizar(datos_validados_sinsonda$Concentracion_NO)
+i_sonda_datos_periodo$NO_norm <- normalizar(i_sonda_datos_periodo$Concentracion_NO)
+
+plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$NO_norm, 
+     type = "l", col = adjustcolor("blue", alpha.f = 0.6), lwd = 2,
+     main = "Comparación de Patrones (Escala Normalizada 0 a 1)", 
+     xlab = "Fecha y Hora", ylab = "Concentración Relativa")
+
+lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$NO_norm, 
+      col = adjustcolor("red", alpha.f = 0.6), lwd = 1.5)
+
+legend("topright", legend = c("Sin Sonda (CSV Validado)", "Con Sonda (DAT)"), 
+       col = c("blue", "red"), lty = 1, lwd = 2, cex = 0.8)
+
+
+#Gráficos (plots) Comparaciones ----
+
+#COMPARACIÓN DE DATOS CRUDOS VS FILTRADOS (NO)
+
+par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
+
+plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, 
+     y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
+     type = "l", col = "gray50", lwd = 1.2,
+     main = "Concentración de NO: Datos Crudos (Sin Filtro)", 
+     xlab = "", ylab = "NO Crudo")
+
+abline(h = 0, col = "red", lty = 2)      # Línea del cero ideal
+abline(h = -3.0, col = "darkred", lty = 3) # Línea del umbral de invalidación (-3.0)
+
+plot(x = datos_validados_sinsonda$Fecha_y_Hora, 
+     y = datos_validados_sinsonda$Concentracion_NO, 
+     type = "l", col = "blue", lwd = 1.2,
+     main = "Concentración de NO: Datos Validados (Umbral -3.0)", 
+     xlab = "Fecha y Hora", ylab = "NO Validado")
+
+abline(h = 0, col = "red", lty = 2)
+par(mfrow = c(1, 1))
+
+
+#GRÁFICO COMPARATIVO 42iQ sin sonda (validado) vs 42i con sonda (.DAT)
 
 # Ajuste de escala para el eje Y
-rango_NO  <- range(c(iQ_sinsonda_datos_periodo$Concentracion_NO, i_sonda_datos_periodo$Concentracion_NO), na.rm = TRUE)
-rango_NOx <- range(c(iQ_sinsonda_datos_periodo$Concentracion_NOx, i_sonda_datos_periodo$Concentracion_NOx), na.rm = TRUE)
+rango_NO  <- range(c(datos_validados_sinsonda$Concentracion_NO, i_sonda_datos_periodo$Concentracion_NO), na.rm = TRUE)
+rango_NOx <- range(c(datos_validados_sinsonda$Concentracion_NOx, i_sonda_datos_periodo$Concentracion_NOx), na.rm = TRUE)
 
 color_sin_sonda <- adjustcolor("blue", alpha.f = 0.6)
 color_con_sonda <- adjustcolor("red", alpha.f = 0.6)
 
-# 1. Gráfico para NO
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
+# 1. Gráfico estático para NO
+plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$Concentracion_NO, 
      type = "l", col = color_sin_sonda, ylim = rango_NO, lwd = 2,
-     main = "Comparación NO: Sin Sonda vs DAT (24/06 - 24/07)", 
+     main = "Comparación NO: CSV Validado vs DAT (24/06 - 24/07)", 
      xlab = "Fecha y Hora", ylab = "Concentración de NO")
 lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$Concentracion_NO, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda (CSV)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
+legend("topright", legend = c("Sin Sonda (Validado)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
 
-# 2. Gráfico para NOx
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$Concentracion_NOx, 
+# 2. Gráfico estático para NOx
+plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$Concentracion_NOx, 
      type = "l", col = color_sin_sonda, ylim = rango_NOx, lwd = 2,
-     main = "Comparación NOx: Sin Sonda vs DAT (24/06 - 24/07)", 
+     main = "Comparación NOx: CSV Validado vs DAT (24/06 - 24/07)", 
      xlab = "Fecha y Hora", ylab = "Concentración de NOx")
 lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$Concentracion_NOx, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda (CSV)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
+legend("topright", legend = c("Sin Sonda (Validado)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
+
+# Añadir línea de referencia estricta en el cero
+abline(h = 0, col = "black", lty = 2, lwd = 1.5)
 
 
-# ==========================================
-# SECCIÓN 8: GRÁFICOS INTERACTIVOS (PLOTLY)
-# ==========================================
-library(plotly)
-
-# 1. Gráfico interactivo para NO
-grafico_dat_NO <- plot_ly() %>%
-  add_lines(x = ~iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sinsonda_datos_periodo$Concentracion_NO, 
-            name = 'Sin Sonda (CSV)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NO, 
-            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación Interactiva NO (24/06 - 24/07)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NO"))
-
-# 2. Gráfico interactivo para NOx
-grafico_dat_NOx <- plot_ly() %>%
-  add_lines(x = ~iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = ~iQ_sinsonda_datos_periodo$Concentracion_NOx, 
-            name = 'Sin Sonda (CSV)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NOx, 
-            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación Interactiva NOx (24/06 - 24/07)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NOx"))
-
-# Mostrar gráficos
-grafico_dat_NO
-grafico_dat_NOx
 
 
-# ==========================================
-# SECCIÓN 9: EVALUACIÓN DE DERIVA DE CERO (.DAT)
-# ==========================================
+# Gráfica .DAT sin sonda
+
 
 # 1. Gráfico Estático
 plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
@@ -508,6 +514,39 @@ plot(x = i_sonda_datos_periodo$Fecha_y_Hora,
 
 # Añadir la línea de referencia en Y = 0
 abline(h = 0, col = "red", lty = 2, lwd = 2)
+
+
+
+
+#Gráficos (ploty) ----
+
+library(plotly)
+
+# 1. Gráfico interactivo para NO
+grafico_NO_val <- plot_ly() %>%
+  add_lines(x = ~datos_validados_sinsonda$Fecha_y_Hora, y = ~datos_validados_sinsonda$Concentracion_NO, 
+            name = 'Sin Sonda (Validado)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
+  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NO, 
+            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
+  layout(title = "Comparación Interactiva NO (CSV Validado vs DAT)",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración de NO"))
+
+# 2. Gráfico interactivo para NOx
+grafico_NOx_val <- plot_ly() %>%
+  add_lines(x = ~datos_validados_sinsonda$Fecha_y_Hora, y = ~datos_validados_sinsonda$Concentracion_NOx, 
+            name = 'Sin Sonda (Validado)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
+  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NOx, 
+            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
+  layout(title = "Comparación Interactiva NOx (CSV Validado vs DAT)",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración de NOx"))
+
+# Mostrar gráficos
+grafico_NO_val
+grafico_NOx_val
+
+
 
 # 2. Gráfico Interactivo (Recomendado para ver la forma de las fluctuaciones)
 library(plotly)
@@ -529,36 +568,9 @@ grafico_desfase_NO <- plot_ly() %>%
 # Mostrar el gráfico interactivo
 grafico_desfase_NO
 
-# ==========================================
-# SECCIÓN 10: COMPARACIÓN DE PATRONES NORMALIZADOS
-# ==========================================
 
-# 1. Función matemática para normalizar entre 0 y 1
-normalizar <- function(x) {
-  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-}
+# ANÁLISIS ESTADÍSTICO (NO y NOx) -----
 
-# 2. Crear nuevas columnas con los datos escalados
-iQ_sinsonda_datos_periodo$NO_norm <- normalizar(iQ_sinsonda_datos_periodo$Concentracion_NO)
-i_sonda_datos_periodo$NO_norm <- normalizar(i_sonda_datos_periodo$Concentracion_NO)
-
-# 3. Gráfico comparativo de las formas
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, y = iQ_sinsonda_datos_periodo$NO_norm, 
-     type = "l", col = adjustcolor("blue", alpha.f = 0.6), lwd = 2,
-     main = "Comparación de Patrones (Escala Normalizada 0 a 1)", 
-     xlab = "Fecha y Hora", ylab = "Concentración Relativa")
-
-lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$NO_norm, 
-      col = adjustcolor("red", alpha.f = 0.6), lwd = 1.5)
-
-legend("topright", legend = c("Sin Sonda (CSV)", "Con Sonda (DAT)"), 
-       col = c("blue", "red"), lty = 1, lwd = 2, cex = 0.8)
-
-
-
-# ==========================================
-# SECCIÓN 11: ANÁLISIS ESTADÍSTICO (NO y NOx)
-# ==========================================
 
 # 1. Alinear las bases de datos para NO y NOx simultáneamente
 datos_alineados <- merge(
@@ -611,3 +623,4 @@ legend("topleft", legend = ecuacion_NOx, text.col = "red", bty = "n", cex = 0.9)
 
 # 6. Restaurar la configuración gráfica a 1 solo panel para futuros gráficos
 par(mfrow = c(1, 1))
+
