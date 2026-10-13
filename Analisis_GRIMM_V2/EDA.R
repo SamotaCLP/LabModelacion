@@ -14,18 +14,42 @@ pkgs <- c(
 
 invisible(lapply(pkgs, library, character.only = TRUE))
 
+#------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# CARPETAS DE RESULTADOS
+# ---------------------------------------------------------------------
+
+dir_resultados <- here(
+  "Analisis_GRIMM_V2",
+  "Resultados",
+  "Resultados Grimm-Cetam-MT"
+)
+
+dir_tablas <- file.path(
+  dir_resultados,
+  "tablas"
+)
+
+dir.create(
+  dir_tablas,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
 
 # ---------------------------------------------------------------------
 # 1. LECTURA DE LOS DATOS
 # ---------------------------------------------------------------------
 
 archivo_cetam <- here(
-  "Datos",
+  "Analisis_GRIMM_V2", "Datos", 
   "GRIMM 11D Cetam 22052025.xlsx"
 )
 
+?here()
+
 archivo_mt <- here(
-  "Datos",
+  "Analisis_GRIMM_V2", "Datos",
   "GRIMM 11D MT 22052025.xlsx"
 )
 
@@ -158,10 +182,6 @@ dat <- comparison_df %>%
     names_from = instrument,
     values_from = value
   ) %>%
-  rename(
-    cetam = CETAM,
-    mt = MT
-  ) %>%
   mutate(
     date = as.POSIXct(date),
     
@@ -174,24 +194,36 @@ dat <- comparison_df %>%
     cetam = pmax(cetam, 0),
     mt = pmax(mt, 0),
     
-    # Diferencia absoluta
+    # Diferencia entre instrumentos
     D = cetam - mt,
     
-    # Promedio de ambas mediciones
+    # Promedio de ambos instrumentos
     M = (cetam + mt) / 2
   ) %>%
   arrange(fraction, date)
-
 
 # ---------------------------------------------------------------------
 # 8. GUARDAR DATOS EN FORMATO RDS
 # ---------------------------------------------------------------------
 
+dir_resultados <- here(
+  "Analisis_GRIMM_V2",
+  "Resultados",
+  "Resultados Grimm-Cetam-MT"
+)
+
+# Crear carpeta si no existe
+dir.create(
+  dir_resultados,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+# Guardar datos
 saveRDS(
   dat,
-  here(
-    "Resultados",
-    "Resultados Grimm-Cetam-MT",
+  file.path(
+    dir_resultados,
     "dat.rds"
   )
 )
@@ -223,10 +255,10 @@ desc <- dat %>%
     .groups = "drop"
   )
 
-
 write_csv(
   desc,
   here(
+    "Analisis_GRIMM_V2",
     "Resultados",
     "Resultados Grimm-Cetam-MT",
     "tablas",
@@ -265,6 +297,7 @@ desc_dif <- dat %>%
 write_csv(
   desc_dif,
   here(
+    "Analisis_GRIMM_V2",
     "Resultados",
     "Resultados Grimm-Cetam-MT",
     "tablas",
@@ -280,19 +313,21 @@ print(desc_dif)
 # ---------------------------------------------------------------------
 
 # Series temporales por fracción
+
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
     "Dygraph por fraccion.R"
   )
-)
-
+) 
 
 # Series temporales de todas las fracciones
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
@@ -304,6 +339,7 @@ source(
 # Boxplots de las mediciones
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
@@ -315,6 +351,7 @@ source(
 # Histogramas de las diferencias
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
@@ -326,6 +363,7 @@ source(
 # Boxplots de las diferencias
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
@@ -337,6 +375,7 @@ source(
 # Q-Q plots de las diferencias
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
@@ -348,6 +387,7 @@ source(
 # Dispersión Cetam vs MT
 source(
   here(
+    "Analisis_GRIMM_V2",
     "Códigos R",
     "Códigos Grimm-Cetam-MT",
     "EDA Interactivos",
