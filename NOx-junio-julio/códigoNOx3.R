@@ -205,51 +205,220 @@ cat("==============================================\n")
 
 # 42iQ con sonda -----------------------####################################
 
-# Igualdad de datos en csv con y sin sonda (24/06 - 24/07) ----
+#lectura de las 3 bases ----
+# 1. Nombres exactos de los archivos
+archivos_csv_sonda <- c("12218618650_UserData42iQ_2025-08-14_12-34-21_Sonda.csv", 
+                        "12218618650_UserData42iQ_2025-08-28_23-16-34_Sonda.csv", 
+                        "12218618650_UserData42iQ_2025-10-07_13-48-55_Sonda.csv")
 
-
-# 1. Definir el nuevo periodo estricto de prueba
-fecha_inicio_prueba <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
-fecha_fin_prueba <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
-
-# 2. Extraer los datos de este periodo exacto desde las bases totales
-test_sinsonda <- subset(iQ_sinsonda_datos_totales, Fecha_y_Hora >= fecha_inicio_prueba & Fecha_y_Hora <= fecha_fin_prueba)
-test_sonda <- subset(iQ_sonda_datos_08_28, Fecha_y_Hora >= fecha_inicio_prueba & Fecha_y_Hora <= fecha_fin_prueba)
-
-cat("\nAnálisis de similitud (Sin Sonda vs Con Sonda) - [24/06 - 24/07]\n")
-cat("----------------------------------------------------------------\n")
-
-# 3. Verificar cantidad de registros
-filas_sin <- nrow(test_sinsonda)
-filas_con <- nrow(test_sonda)
-cat(sprintf("Registros Sin Sonda: %d\n", filas_sin))
-cat(sprintf("Registros Con Sonda: %d\n", filas_con))
-
-# 4. Comparación matemática valor por valor
-if (filas_sin == filas_con && filas_sin > 0) {
-  dif_NO  <- sum(test_sinsonda$Concentracion_NO != test_sonda$Concentracion_NO, na.rm = TRUE)
-  dif_NO2 <- sum(test_sinsonda$Concentracion_NO2 != test_sonda$Concentracion_NO2, na.rm = TRUE)
-  dif_NOx <- sum(test_sinsonda$Concentracion_NOx != test_sonda$Concentracion_NOx, na.rm = TRUE)
+# 2. Función de lectura idéntica a la anterior (protegiendo row.names)
+leer_csv_42iQ_sonda <- function(archivo) {
+  datos <- read.csv(archivo, stringsAsFactors = FALSE, row.names = NULL)
   
-  cat("\nDiferencias numéricas encontradas:\n")
-  cat(sprintf("NO : %d datos distintos.\n", dif_NO))
-  cat(sprintf("NO2: %d datos distintos.\n", dif_NO2))
-  cat(sprintf("NOx: %d datos distintos.\n", dif_NOx))
+  # Extraer Tiempo, NO, NO2, NOx
+  datos_limpios <- datos[, c(1, 8, 9, 10)]
+  colnames(datos_limpios) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
   
-  if (dif_NO == 0 && dif_NO2 == 0 && dif_NOx == 0) {
-    cat("\nLos datos son 100% idénticos en este periodo.\n")
-  }
-} else {
-  cat("\nNota: Las bases siguen teniendo distinta cantidad de registros o no hay datos en este corte.\n")
+  # Formatear fecha
+  datos_limpios$Fecha_y_Hora <- as.POSIXct(datos_limpios$Fecha_y_Hora, format="%d/%m/%Y %H:%M:%S")
+  
+  return(datos_limpios)
 }
 
+# 3. Leer las 3 bases de forma independiente
+base1_sonda <- leer_csv_42iQ_sonda(archivos_csv_sonda[1])
+base2_sonda <- leer_csv_42iQ_sonda(archivos_csv_sonda[2])
+base3_sonda <- leer_csv_42iQ_sonda(archivos_csv_sonda[3])
+
+
+#analisis de contención de bases ----
+rango1_sonda <- range(base1_sonda$Fecha_y_Hora, na.rm = TRUE)
+rango2_sonda <- range(base2_sonda$Fecha_y_Hora, na.rm = TRUE)
+rango3_sonda <- range(base3_sonda$Fecha_y_Hora, na.rm = TRUE)
+
+cat("\n--- Análisis de Periodos por Archivo (Con Sonda) ---\n")
+cat("Base 1 (14 Ago):", format(rango1_sonda[1]), " al ", format(rango1_sonda[2]), "\n")
+cat("Base 2 (28 Ago):", format(rango2_sonda[1]), " al ", format(rango2_sonda[2]), "\n")
+cat("Base 3 (07 Oct):", format(rango3_sonda[1]), " al ", format(rango3_sonda[2]), "\n")
+
+# Evaluar si la Base 1 está contenida en la Base 2
+contenida_1_en_2 <- (rango2_sonda[1] <= rango1_sonda[1]) & (rango2_sonda[2] >= rango1_sonda[2])
+
+cat("\n--- Conclusión de Solapamiento ---\n")
+if(contenida_1_en_2) {
+  cat("RESULTADO: La Base 1 está contenida 100% dentro de la Base 2.\n")
+  cat("ACCIÓN: Se descarta la Base 1. Se unen (rbind) la Base 2 y la Base 3.\n")
+  
+  # Unimos solo la 2 y la 3
+  iQ_sonda_datos_totales <- rbind(base2_sonda, base3_sonda)
+  
+} else {
+  # Por si acaso, si la lógica falla, unimos las tres
+  cat("ACCIÓN: Se unen las tres bases.\n")
+  iQ_sonda_datos_totales <- do.call(rbind, list(base1_sonda, base2_sonda, base3_sonda))
+}
+
+# 4. Ordenar cronológicamente y forzar unicidad (eliminar traslapes exactos)
+iQ_sonda_datos_totales <- iQ_sonda_datos_totales[order(iQ_sonda_datos_totales$Fecha_y_Hora), ]
+iQ_sonda_datos_totales <- iQ_sonda_datos_totales[!duplicated(iQ_sonda_datos_totales$Fecha_y_Hora), ]
 
 
 
+#total de registro unicos y NAs iniciales ----
+total_crudos_sonda <- nrow(iQ_sonda_datos_totales)
 
+na_crudos_NO_sonda  <- sum(is.na(iQ_sonda_datos_totales$Concentracion_NO))
+na_crudos_NO2_sonda <- sum(is.na(iQ_sonda_datos_totales$Concentracion_NO2))
+na_crudos_NOx_sonda <- sum(is.na(iQ_sonda_datos_totales$Concentracion_NOx))
 
+cat("\n==============================================\n")
+cat("DIAGNÓSTICO DE CONTINUIDAD (BASE CRUDA - CON SONDA)\n")
+cat("==============================================\n")
+cat(sprintf("Total de registros crudos: %d\n", total_crudos_sonda))
+cat(sprintf("Valores NA iniciales -> NO: %d | NO2: %d | NOx: %d\n", 
+            na_crudos_NO_sonda, na_crudos_NO2_sonda, na_crudos_NOx_sonda))
+cat("==============================================\n")
+#analisis de valores constantes ----
+total_crudos_sonda <- nrow(iQ_sonda_datos_totales)
+datos_filtro1_sonda <- iQ_sonda_datos_totales
 
+# 2. Función para detectar rachas >= 4 y convertirlas en NA
+filtrar_rachas <- function(vector_gases, limite = 4) {
+  vector_seguro <- vector_gases
+  vector_seguro[is.na(vector_seguro)] <- -999999
+  
+  rachas <- rle(vector_seguro)
+  es_pegado <- rachas$lengths >= limite
+  es_pegado[rachas$values == -999999] <- FALSE
+  
+  indices_pegados <- rep(es_pegado, rachas$lengths)
+  vector_gases[indices_pegados] <- NA
+  return(vector_gases)
+}
+
+# 3. Aplicar filtro a cada contaminante
+datos_filtro1_sonda$Concentracion_NO  <- filtrar_rachas(datos_filtro1_sonda$Concentracion_NO, limite = 4)
+datos_filtro1_sonda$Concentracion_NO2 <- filtrar_rachas(datos_filtro1_sonda$Concentracion_NO2, limite = 4)
+datos_filtro1_sonda$Concentracion_NOx <- filtrar_rachas(datos_filtro1_sonda$Concentracion_NOx, limite = 4)
+
+# 4. Contabilizar datos eliminados y nuevos totales válidos por gas
+valido_NO_sonda  <- sum(!is.na(datos_filtro1_sonda$Concentracion_NO))
+valido_NO2_sonda <- sum(!is.na(datos_filtro1_sonda$Concentracion_NO2))
+valido_NOx_sonda <- sum(!is.na(datos_filtro1_sonda$Concentracion_NOx))
+
+elim_f1_NO_sonda  <- total_crudos_sonda - valido_NO_sonda
+elim_f1_NO2_sonda <- total_crudos_sonda - valido_NO2_sonda
+elim_f1_NOx_sonda <- total_crudos_sonda - valido_NOx_sonda
+
+# 5. Eliminar físicamente de la tabla las filas donde los 3 gases quedaron en NA
+filas_vacias <- is.na(datos_filtro1_sonda$Concentracion_NO) & 
+  is.na(datos_filtro1_sonda$Concentracion_NO2) & 
+  is.na(datos_filtro1_sonda$Concentracion_NOx)
+datos_filtro1_sonda <- datos_filtro1_sonda[!filas_vacias, ]
+
+# 6. Reporte del Primer Filtro con el nuevo total
+cat("\n==============================================\n")
+cat("REPORTE PRIMER FILTRO: VALORES CONSTANTES (>= 4) CON SONDA\n")
+cat("==============================================\n")
+cat(sprintf("Total de datos crudos iniciales : %d registros\n\n", total_crudos_sonda))
+cat("Datos eliminados y total válido restante (Post-Filtro 1):\n")
+cat(sprintf("- NO  : %d eliminados (%.4f%%) -> Quedan %d datos válidos\n", 
+            elim_f1_NO_sonda, (elim_f1_NO_sonda / total_crudos_sonda) * 100, valido_NO_sonda))
+cat(sprintf("- NO2 : %d eliminados (%.4f%%) -> Quedan %d datos válidos\n", 
+            elim_f1_NO2_sonda, (elim_f1_NO2_sonda / total_crudos_sonda) * 100, valido_NO2_sonda))
+cat(sprintf("- NOx : %d eliminados (%.4f%%) -> Quedan %d datos válidos\n", 
+            elim_f1_NOx_sonda, (elim_f1_NOx_sonda / total_crudos_sonda) * 100, valido_NOx_sonda))
+cat("==============================================\n")
+#analisis de valores negativos ----
+# 1. Conteo de negativos ANTES de aplicar la limpieza (sobre datos_filtro1_sonda ya reducido)
+neg_NO_sonda  <- sum(datos_filtro1_sonda$Concentracion_NO < 0, na.rm = TRUE)
+neg_NO2_sonda <- sum(datos_filtro1_sonda$Concentracion_NO2 < 0, na.rm = TRUE)
+neg_NOx_sonda <- sum(datos_filtro1_sonda$Concentracion_NOx < 0, na.rm = TRUE)
+
+cat("\n==============================================\n")
+cat("DIAGNÓSTICO DE NEGATIVOS (PRE-FILTRO 2) CON SONDA\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo (Post-Filtro 1): NO=%d | NO2=%d | NOx=%d\n\n", 
+            valido_NO_sonda, valido_NO2_sonda, valido_NOx_sonda))
+cat(sprintf("- NO  : %d registros negativos (%.2f%% del total válido)\n", neg_NO_sonda, (neg_NO_sonda/valido_NO_sonda)*100))
+cat(sprintf("- NO2 : %d registros negativos (%.2f%% del total válido)\n", neg_NO2_sonda, (neg_NO2_sonda/valido_NO2_sonda)*100))
+cat(sprintf("- NOx : %d registros negativos (%.2f%% del total válido)\n", neg_NOx_sonda, (neg_NOx_sonda/valido_NOx_sonda)*100))
+
+# 2. Crear nueva base para aplicar el segundo filtro
+datos_filtro2_sonda <- datos_filtro1_sonda
+umbral_ruido <- -3.0
+columnas_gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
+
+reporte_f2_sonda <- list()
+
+# 3. Aplicar las reglas estadísticas de limpieza
+for(col in columnas_gases) {
+  vec <- datos_filtro2_sonda[[col]]
+  
+  idx_ruido  <- which(vec < 0 & vec >= umbral_ruido)
+  idx_fallas <- which(vec < umbral_ruido)
+  
+  reporte_f2_sonda[[col]] <- list(ruido = length(idx_ruido), fallas = length(idx_fallas))
+  
+  vec[idx_ruido] <- 0
+  vec[idx_fallas] <- NA
+  
+  datos_filtro2_sonda[[col]] <- vec
+}
+
+# 4. Reporte final post-filtro 2
+cat("\n==============================================\n")
+cat("REPORTE SEGUNDO FILTRO: CORRECCIÓN UMBRAL -3.0 (CON SONDA)\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo (Post-Filtro 1): %d registros válidos\n\n", nrow(datos_filtro1_sonda)))
+
+cat("1. Ruido térmico ajustado a 0 (valores entre 0 y -3.0):\n")
+cat(sprintf("- NO  : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO$ruido, (reporte_f2_sonda$Concentracion_NO$ruido/valido_NO_sonda)*100))
+cat(sprintf("- NO2 : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO2$ruido, (reporte_f2_sonda$Concentracion_NO2$ruido/valido_NO2_sonda)*100))
+cat(sprintf("- NOx : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NOx$ruido, (reporte_f2_sonda$Concentracion_NOx$ruido/valido_NOx_sonda)*100))
+
+cat("\n2. Fallas críticas descartadas a NA (valores < -3.0):\n")
+cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO$fallas, (reporte_f2_sonda$Concentracion_NO$fallas/valido_NO_sonda)*100))
+cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO2$fallas, (reporte_f2_sonda$Concentracion_NO2$fallas/valido_NO2_sonda)*100))
+cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/valido_NOx_sonda)*100))
+cat("==============================================\n")
 ############################################################################
+
+
+
+#reporte de datos 42iQ con y sin sonda ----
+base_final_sinsonda <- datos_filtro2_sinsonda
+base_final_sonda    <- datos_filtro2_sonda
+
+# 2. Calcular los datos finales útiles (sin NAs) para el equipo SIN SONDA
+final_NO_sinsonda  <- sum(!is.na(base_final_sinsonda$Concentracion_NO))
+final_NO2_sinsonda <- sum(!is.na(base_final_sinsonda$Concentracion_NO2))
+final_NOx_sinsonda <- sum(!is.na(base_final_sinsonda$Concentracion_NOx))
+
+# 3. Calcular los datos finales útiles (sin NAs) para el equipo CON SONDA
+final_NO_sonda  <- sum(!is.na(base_final_sonda$Concentracion_NO))
+final_NO2_sonda <- sum(!is.na(base_final_sonda$Concentracion_NO2))
+final_NOx_sonda <- sum(!is.na(base_final_sonda$Concentracion_NOx))
+
+# 4. Imprimir Reporte Oficial para el documento
+cat("\n==============================================\n")
+cat("REPORTE OFICIAL: VOLUMEN DE DATOS TOTALMENTE VALIDADOS\n")
+cat("==============================================\n")
+cat("EQUIPO 42iQ SIN SONDA (Base para gráficos e informes):\n")
+cat(sprintf("- NO  : %d registros 100%% válidos\n", final_NO_sinsonda))
+cat(sprintf("- NO2 : %d registros 100%% válidos\n", final_NO2_sinsonda))
+cat(sprintf("- NOx : %d registros 100%% válidos\n", final_NOx_sinsonda))
+cat("----------------------------------------------\n")
+cat("EQUIPO 42iQ CON SONDA (Base para gráficos e informes):\n")
+cat(sprintf("- NO  : %d registros 100%% válidos\n", final_NO_sonda))
+cat(sprintf("- NO2 : %d registros 100%% válidos\n", final_NO2_sonda))
+cat(sprintf("- NOx : %d registros 100%% válidos\n", final_NOx_sonda))
+cat("==============================================\n")
+
+
+
+
+
 
 
 
@@ -310,6 +479,67 @@ analizar_falla(i_sinsonda_datos_periodo$Concentracion_NOx)
 
 
 
+#filtro de negativos ----
+total_valido_sonda <- nrow(datos_filtro1_sonda)
+
+# 2. Conteo de negativos ANTES de aplicar la limpieza
+neg_NO_sonda  <- sum(datos_filtro1_sonda$Concentracion_NO < 0, na.rm = TRUE)
+neg_NO2_sonda <- sum(datos_filtro1_sonda$Concentracion_NO2 < 0, na.rm = TRUE)
+neg_NOx_sonda <- sum(datos_filtro1_sonda$Concentracion_NOx < 0, na.rm = TRUE)
+
+cat("\n==============================================\n")
+cat("DIAGNÓSTICO DE NEGATIVOS (PRE-FILTRO 2) CON SONDA\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo: %d registros válidos\n\n", total_valido_sonda))
+cat(sprintf("- NO  : %d registros negativos (%.2f%% del total válido)\n", neg_NO_sonda, (neg_NO_sonda/total_valido_sonda)*100))
+cat(sprintf("- NO2 : %d registros negativos (%.2f%% del total válido)\n", neg_NO2_sonda, (neg_NO2_sonda/total_valido_sonda)*100))
+cat(sprintf("- NOx : %d registros negativos (%.2f%% del total válido)\n", neg_NOx_sonda, (neg_NOx_sonda/total_valido_sonda)*100))
+
+# 3. Crear nueva base para aplicar el segundo filtro de forma segura
+datos_filtro2_sonda <- datos_filtro1_sonda
+umbral_ruido <- -3.0
+columnas_gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
+
+# Lista para almacenar los resultados del filtro y reportarlos luego
+reporte_f2_sonda <- list()
+
+# 4. Aplicar las reglas estadísticas de limpieza
+for(col in columnas_gases) {
+  vec <- datos_filtro2_sonda[[col]]
+  
+  # Identificar las posiciones exactas de ruido térmico y fallas críticas
+  idx_ruido  <- which(vec < 0 & vec >= umbral_ruido)
+  idx_fallas <- which(vec < umbral_ruido)
+  
+  # Guardar los conteos en la lista
+  reporte_f2_sonda[[col]] <- list(ruido = length(idx_ruido), fallas = length(idx_fallas))
+  
+  # A) Ruido térmico a 0
+  vec[idx_ruido] <- 0
+  
+  # B) Fallas críticas de hardware a NA
+  vec[idx_fallas] <- NA
+  
+  # Sobrescribir la columna en la nueva base
+  datos_filtro2_sonda[[col]] <- vec
+}
+
+# 5. Reporte final post-filtro 2 con porcentajes
+cat("\n==============================================\n")
+cat("REPORTE SEGUNDO FILTRO: CORRECCIÓN UMBRAL -3.0 (CON SONDA)\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo: %d registros válidos (Post-Filtro 1)\n\n", total_valido_sonda))
+
+cat("1. Ruido térmico ajustado a 0 (valores entre 0 y -3.0):\n")
+cat(sprintf("- NO  : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO$ruido, (reporte_f2_sonda$Concentracion_NO$ruido/total_valido_sonda)*100))
+cat(sprintf("- NO2 : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO2$ruido, (reporte_f2_sonda$Concentracion_NO2$ruido/total_valido_sonda)*100))
+cat(sprintf("- NOx : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NOx$ruido, (reporte_f2_sonda$Concentracion_NOx$ruido/total_valido_sonda)*100))
+
+cat("\n2. Fallas críticas descartadas a NA (valores < -3.0):\n")
+cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO$fallas, (reporte_f2_sonda$Concentracion_NO$fallas/total_valido_sonda)*100))
+cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO2$fallas, (reporte_f2_sonda$Concentracion_NO2$fallas/total_valido_sonda)*100))
+cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/total_valido_sonda)*100))
+cat("==============================================\n")
 ###############################################################################
 
 
