@@ -1,227 +1,209 @@
-# 42iQ sin sonda ----
+# 42iQ sin sonda -----------------------####################################
 
-iQ_sinsonda_archivo_julio <- "12218618650_UserData42iQ_2025-07-25_13-48-35_Sinsonda.csv"
+#lectura 3 bases ----
+archivos_csv <- c("12218618650_UserData42iQ_2025-05-30_15-24-10_Sinsonda.csv", 
+                  "12218618650_UserData42iQ_2025-06-19_14-49-00_Sinsonda.csv", 
+                  "12218618650_UserData42iQ_2025-07-25_13-48-35_Sinsonda.csv")
 
-iQ_sinsonda_nombres_orig <- names(read.csv(iQ_sinsonda_archivo_julio, nrows = 0, check.names = FALSE))
-iQ_sinsonda_datos_crudos <- read.csv(iQ_sinsonda_archivo_julio, skip = 1, header = FALSE)
-colnames(iQ_sinsonda_datos_crudos)[1:length(iQ_sinsonda_nombres_orig)] <- iQ_sinsonda_nombres_orig
-
-columnas_de_interes <- c(
-  "Time Stamp",
-  "NO Concentration (ppb or ug/m3)",
-  "NO2 Concentration (ppb or ug/m3)",
-  "NOx Concentration (ppb or ug/m3)"
-)
-nombres_intuitivos <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
-
-iQ_sinsonda_datos_totales <- iQ_sinsonda_datos_crudos[, columnas_de_interes]
-colnames(iQ_sinsonda_datos_totales) <- nombres_intuitivos
-iQ_sinsonda_datos_totales$Fecha_y_Hora <- as.POSIXct(iQ_sinsonda_datos_totales$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-# VERIFICACIÓN DE INTEGRIDAD (MAYO Y JUNIO)
-iQ_sinsonda_archivo_mayo <- "12218618650_UserData42iQ_2025-05-30_15-24-10_Sinsonda.csv"
-iQ_sinsonda_archivo_junio <- "12218618650_UserData42iQ_2025-06-19_14-49-00_Sinsonda.csv"
-
-# Procesamiento de Mayo
-iQ_sinsonda_crudos_mayo <- read.csv(iQ_sinsonda_archivo_mayo, skip = 1, header = FALSE)
-colnames(iQ_sinsonda_crudos_mayo)[1:length(iQ_sinsonda_nombres_orig)] <- iQ_sinsonda_nombres_orig
-iQ_sinsonda_datos_mayo <- iQ_sinsonda_crudos_mayo[, columnas_de_interes]
-colnames(iQ_sinsonda_datos_mayo) <- nombres_intuitivos
-iQ_sinsonda_datos_mayo$Fecha_y_Hora <- as.POSIXct(iQ_sinsonda_datos_mayo$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-# Procesamiento de Junio
-iQ_sinsonda_crudos_junio <- read.csv(iQ_sinsonda_archivo_junio, skip = 1, header = FALSE)
-colnames(iQ_sinsonda_crudos_junio)[1:length(iQ_sinsonda_nombres_orig)] <- iQ_sinsonda_nombres_orig
-iQ_sinsonda_datos_junio <- iQ_sinsonda_crudos_junio[, columnas_de_interes]
-colnames(iQ_sinsonda_datos_junio) <- nombres_intuitivos
-iQ_sinsonda_datos_junio$Fecha_y_Hora <- as.POSIXct(iQ_sinsonda_datos_junio$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-# Función de comprobación
-verificar_inclusion <- function(df_menor, df_mayor) {
-  registros_incluidos <- df_menor$Fecha_y_Hora %in% df_mayor$Fecha_y_Hora
-  if (all(registros_incluidos)) {
-    cat("Confirmado: El 100% de los datos están contenidos en la base mayor.\n")
-  } else {
-    faltantes <- sum(!registros_incluidos)
-    cat(sprintf("Alerta: Faltan %d registros en la base principal.\n", faltantes))
-  }
+# 2. Función de lectura con corrección de row.names
+leer_csv_42iQ <- function(archivo) {
+  # row.names = NULL mantiene cada columna en su posición original
+  datos <- read.csv(archivo, stringsAsFactors = FALSE, row.names = NULL)
+  
+  # Posiciones reales: 1 (Time Stamp), 8 (NO), 9 (NO2), 10 (NOx)
+  datos_limpios <- datos[, c(1, 8, 9, 10)]
+  
+  colnames(datos_limpios) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
+  datos_limpios$Fecha_y_Hora <- as.POSIXct(datos_limpios$Fecha_y_Hora, format="%d/%m/%Y %H:%M:%S")
+  
+  return(datos_limpios)
 }
 
-cat("\nAnálisis de integridad (Base 05_30 contenida en 07_25):\n")
-cat("-------------------------------------------------------\n")
-verificar_inclusion(iQ_sinsonda_datos_mayo, iQ_sinsonda_datos_totales)
+# 3. Unir las 3 bases
+lista_csv <- lapply(archivos_csv, leer_csv_42iQ)
+iQ_sinsonda_datos_totales <- do.call(rbind, lista_csv)
 
-cat("\nAnálisis de integridad (Base 06_19 contenida en 07_25):\n")
-cat("-------------------------------------------------------\n")
-verificar_inclusion(iQ_sinsonda_datos_junio, iQ_sinsonda_datos_totales)
-
-
-
-# DIAGNÓSTICO PROFUNDO DE NEGATIVOS (SIN SONDA)
+# 4. Ordenar cronológicamente y eliminar solapamientos exactos
+iQ_sinsonda_datos_totales <- iQ_sinsonda_datos_totales[order(iQ_sinsonda_datos_totales$Fecha_y_Hora), ]
+iQ_sinsonda_datos_totales <- iQ_sinsonda_datos_totales[!duplicated(iQ_sinsonda_datos_totales$Fecha_y_Hora), ]
 
 
-reportar_negativos_detallado <- function(df, columna) {
-  # Contabilizar el total de datos en el dataframe
-  total_filas <- nrow(df)
+#contención de bases ----
+base1 <- leer_csv_42iQ(archivos_csv[1])
+base2 <- leer_csv_42iQ(archivos_csv[2])
+base3 <- leer_csv_42iQ(archivos_csv[3])
+
+# 2. Extraer fechas de inicio y fin de cada archivo
+rango1 <- range(base1$Fecha_y_Hora, na.rm = TRUE)
+rango2 <- range(base2$Fecha_y_Hora, na.rm = TRUE)
+rango3 <- range(base3$Fecha_y_Hora, na.rm = TRUE)
+
+# 3. Imprimir la radiografía temporal para inspección visual
+cat("\n--- Análisis de Periodos por Archivo ---\n")
+cat("Base 1 (Mayo) :", format(rango1[1]), " al ", format(rango1[2]), "\n")
+cat("Base 2 (Junio):", format(rango2[1]), " al ", format(rango2[2]), "\n")
+cat("Base 3 (Julio):", format(rango3[1]), " al ", format(rango3[2]), "\n")
+
+# 4. Comprobación lógica y matemática de contención
+# ¿La base 3 empieza antes o igual y termina después o igual que las otras dos?
+contenida_1 <- (rango3[1] <= rango1[1]) & (rango3[2] >= rango1[2])
+contenida_2 <- (rango3[1] <= rango2[1]) & (rango3[2] >= rango2[2])
+
+cat("\n--- Conclusión del Análisis de Solapamiento ---\n")
+if(contenida_1 & contenida_2) {
+  cat("RESULTADO: La Base 1 y Base 2 están temporalmente contenidas al 100% en la Base 3.\n")
+  cat("ACCIÓN: Se descartan las dos primeras bases para evitar redundancia de procesamiento.\n")
   
-  # Filtrar los valores negativos
-  filas_neg <- df[which(df[[columna]] < 0), ]
-  n_neg <- nrow(filas_neg)
+  # Redefinimos la base total usando ÚNICAMENTE la tercera base
+  iQ_sinsonda_datos_totales <- base3
   
-  cat(sprintf("\n--- %s ---\n", columna))
-  cat(sprintf("Datos totales en el periodo: %d\n", total_filas))
+} else {
+  cat("RESULTADO: Las bases aportan datos en periodos distintos.\n")
+  cat("ACCIÓN: Es necesario unirlas (rbind) y usar unique() para los traslapes parciales.\n")
   
-  if (n_neg > 0) {
-    porcentaje <- (n_neg / total_filas) * 100
-    cat(sprintf("Cantidad de negativos: %d (%.4f%% del total)\n", n_neg, porcentaje))
-    
-    # Identificar el valor más extremo y su fecha
-    indice_minimo <- which.min(filas_neg[[columna]])
-    valor_minimo <- filas_neg[[columna]][indice_minimo]
-    fecha_minimo <- filas_neg$Fecha_y_Hora[indice_minimo]
-    
-    cat(sprintf("Valor más negativo (Mínimo): %.5f\n", valor_minimo))
-    cat(sprintf("Fecha y hora del mínimo: %s\n", format(fecha_minimo, "%d/%m/%Y %H:%M:%S")))
-    
-    cat("\nMuestra de los primeros registros negativos:\n")
-    print(head(filas_neg[, c("Fecha_y_Hora", columna)], 5))
-  } else {
-    cat("Cantidad de negativos: 0 (0% del total)\n")
-    cat("No hay valores mínimos negativos que reportar.\n")
-  }
+  # Se mantiene la lógica de unión si resultan no estar contenidas
+  lista_csv <- list(base1, base2, base3)
+  iQ_sinsonda_datos_totales <- do.call(rbind, lista_csv)
+  iQ_sinsonda_datos_totales <- iQ_sinsonda_datos_totales[order(iQ_sinsonda_datos_totales$Fecha_y_Hora), ]
+  iQ_sinsonda_datos_totales <- iQ_sinsonda_datos_totales[!duplicated(iQ_sinsonda_datos_totales$Fecha_y_Hora), ]
 }
 
-cat("\nReporte Detallado de Negativos en CSV (24/06 - 24/07)\n")
-cat("====================================================\n")
-reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO")
-reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NO2")
-reportar_negativos_detallado(iQ_sinsonda_datos_periodo, "Concentracion_NOx")
 
-
-# SECCIÓN 13: CORRECCIÓN JUSTIFICADA DE NEGATIVOS
-
-
-# Definimos el umbral estadístico de ruido (límite máximo aceptable)
-umbral_ruido <- -3.0
-
-# Función de corrección basada en límites de detección
-limpiar_negativos <- function(vector, limite_ruido) {
-  # 1. Fallas extremas (< -3.0) se vuelven NA
-  vector[vector < limite_ruido & !is.na(vector)] <- NA
+#analisis valores constantes ----
+analizar_falla <- function(valores, limite = 4) {
+  valores <- na.omit(valores)
+  if(length(valores) == 0) return()
   
-  # 2. Ruido estadístico normal (entre -3.0 y 0) se trunca a 0
-  vector[vector < 0 & vector >= limite_ruido & !is.na(vector)] <- 0
-  
-  return(vector)
-}
-
-# Aplicar la limpieza a tu base sin sonda
-datos_validados_sinsonda <- iQ_sinsonda_datos_periodo
-
-datos_validados_sinsonda$Concentracion_NO <- limpiar_negativos(
-  datos_validados_sinsonda$Concentracion_NO, umbral_ruido
-)
-datos_validados_sinsonda$Concentracion_NO2 <- limpiar_negativos(
-  datos_validados_sinsonda$Concentracion_NO2, umbral_ruido
-)
-datos_validados_sinsonda$Concentracion_NOx <- limpiar_negativos(
-  datos_validados_sinsonda$Concentracion_NOx, umbral_ruido
-)
-
-# Evaluar cuántos datos se perdieron realmente (pasaron a NA)
-cat("\nReporte de Datos Invalidados (Fallas < -3.0)\n")
-cat("NO  : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO)), " registros descartados.\n")
-cat("NO2 : ", sum(is.na(datos_validados_sinsonda$Concentracion_NO2)), " registros descartados.\n")
-cat("NOx : ", sum(is.na(datos_validados_sinsonda$Concentracion_NOx)), " registros descartados.\n")
-
-
-
-# EXTRACCIÓN PERIODO ESTUDIO SIN SONDA (24 JUNIO - 24 JULIO)
-fecha_inicio <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
-fecha_fin <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
-
-datos_validados_sinsonda <- subset(iQ_sinsonda_datos_totales, Fecha_y_Hora >= fecha_inicio & Fecha_y_Hora <= fecha_fin)
-
-datos_validados_sinsonda$Concentracion_NO <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NO, umbral_ruido)
-datos_validados_sinsonda$Concentracion_NO2 <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NO2, umbral_ruido)
-datos_validados_sinsonda$Concentracion_NOx <- limpiar_negativos(datos_validados_sinsonda$Concentracion_NOx, umbral_ruido)
-
-
-analizar_falla <- function(valores, limite_minutos = 3) {
   rachas <- rle(valores)
-  fallas <- rachas$lengths >= limite_minutos
+  fallas <- rachas$lengths >= limite
   
   if(any(fallas)) {
-    cat("Advertencia: Se registraron valores constantes.\n")
-    print(data.frame(Valor = rachas$values[fallas], 
-                     Minutos_Consecutivos = rachas$lengths[fallas]))
+    cat("Advertencia: Se detectaron valores constantes.\n")
+    print(data.frame(Valor_Pegado = rachas$values[fallas], 
+                     Repeticiones = rachas$lengths[fallas]))
   } else {
-    cat("Estado normal: Sin anomalías detectadas.\n")
+    cat("Estado normal: No hay valores constantes por 4 o más mediciones.\n")
   }
 }
 
-cat("\nReporte de parámetros Sin Sonda (Límite: 3 min)\n")
-cat("--------------------------------------\n")
-cat("NO:\n")
-analizar_falla(iQ_sinsonda_datos_periodo$Concentracion_NO)
-cat("\nNO2:\n")
-analizar_falla(iQ_sinsonda_datos_periodo$Concentracion_NO2)
-cat("\nNOx:\n")
-analizar_falla(iQ_sinsonda_datos_periodo$Concentracion_NOx)
+cat("\n--- Análisis de Mediciones constantes (42iQ) ---\n")
+cat("NO:\n"); analizar_falla(iQ_sinsonda_datos_totales$Concentracion_NO)
+cat("\nNO2:\n"); analizar_falla(iQ_sinsonda_datos_totales$Concentracion_NO2)
+cat("\nNOx:\n"); analizar_falla(iQ_sinsonda_datos_totales$Concentracion_NOx)
+#total de registros unicos y NAs iniciales ----
+total_crudos <- nrow(iQ_sinsonda_datos_totales)
+
+na_crudos_NO  <- sum(is.na(iQ_sinsonda_datos_totales$Concentracion_NO))
+na_crudos_NO2 <- sum(is.na(iQ_sinsonda_datos_totales$Concentracion_NO2))
+na_crudos_NOx <- sum(is.na(iQ_sinsonda_datos_totales$Concentracion_NOx))
+
+cat("\n==============================================\n")
+cat("DIAGNÓSTICO DE CONTINUIDAD (BASE CRUDA)\n")
+cat("==============================================\n")
+cat(sprintf("Total de registros crudos: %d\n", total_crudos))
+cat(sprintf("Valores NA iniciales -> NO: %d | NO2: %d | NOx: %d\n", 
+            na_crudos_NO, na_crudos_NO2, na_crudos_NOx))
+cat("==============================================\n")
+#eliminacion de datos en calibración ----
+# 1. Crear copia para el primer filtro (preservando la base cruda intacta)
+datos_filtro1_sinsonda <- iQ_sinsonda_datos_totales
+
+# 2. Función limpia para convertir rachas >= 4 en NA
+filtrar_rachas <- function(vector_gases, limite = 4) {
+  rachas <- rle(vector_gases)
+  indices_pegados <- rep(rachas$lengths >= limite, rachas$lengths)
+  vector_gases[indices_pegados] <- NA
+  return(vector_gases)
+}
+
+# 3. Aplicar primer filtro a cada contaminante
+datos_filtro1_sinsonda$Concentracion_NO  <- filtrar_rachas(datos_filtro1_sinsonda$Concentracion_NO, limite = 4)
+datos_filtro1_sinsonda$Concentracion_NO2 <- filtrar_rachas(datos_filtro1_sinsonda$Concentracion_NO2, limite = 4)
+datos_filtro1_sinsonda$Concentracion_NOx <- filtrar_rachas(datos_filtro1_sinsonda$Concentracion_NOx, limite = 4)
+
+# 4. Contabilizar datos eliminados (nuevos NA) y su porcentaje respecto al total crudo
+elim_f1_NO  <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NO)) - na_crudos_NO
+elim_f1_NO2 <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NO2)) - na_crudos_NO2
+elim_f1_NOx <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NOx)) - na_crudos_NOx
+
+cat("\n==============================================\n")
+cat("REPORTE PRIMER FILTRO: VALORES CONSTANTES (>= 4)\n")
+cat("==============================================\n")
+cat(sprintf("Total de datos crudos evaluados: %d registros\n\n", total_crudos))
+cat("Datos convertidos a NA (periodos de estabilización/calentamiento):\n")
+cat(sprintf("- NO  : %d registros eliminados (%.4f%% del total)\n", elim_f1_NO, (elim_f1_NO / total_crudos) * 100))
+cat(sprintf("- NO2 : %d registros eliminados (%.4f%% del total)\n", elim_f1_NO2, (elim_f1_NO2 / total_crudos) * 100))
+cat(sprintf("- NOx : %d registros eliminados (%.4f%% del total)\n", elim_f1_NOx, (elim_f1_NOx / total_crudos) * 100))
+cat("==============================================\n")
+#filtrado de negativos ----
+# 1. Definir el total válido (post-filtro 1) como base de cálculo
+total_valido <- nrow(datos_filtro1_sinsonda)
+
+# 2. Conteo de negativos ANTES de aplicar la limpieza
+neg_NO  <- sum(datos_filtro1_sinsonda$Concentracion_NO < 0, na.rm = TRUE)
+neg_NO2 <- sum(datos_filtro1_sinsonda$Concentracion_NO2 < 0, na.rm = TRUE)
+neg_NOx <- sum(datos_filtro1_sinsonda$Concentracion_NOx < 0, na.rm = TRUE)
+
+cat("\n==============================================\n")
+cat("DIAGNÓSTICO DE NEGATIVOS (PRE-FILTRO 2)\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo: %d registros válidos\n\n", total_valido))
+cat(sprintf("- NO  : %d registros negativos (%.2f%% del total válido)\n", neg_NO, (neg_NO/total_valido)*100))
+cat(sprintf("- NO2 : %d registros negativos (%.2f%% del total válido)\n", neg_NO2, (neg_NO2/total_valido)*100))
+cat(sprintf("- NOx : %d registros negativos (%.2f%% del total válido)\n", neg_NOx, (neg_NOx/total_valido)*100))
+
+# 3. Crear nueva base para aplicar el segundo filtro de forma segura
+datos_filtro2_sinsonda <- datos_filtro1_sinsonda
+umbral_ruido <- -3.0
+columnas_gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
+
+# Lista para almacenar los resultados del filtro
+reporte_f2 <- list()
+
+# 4. Aplicar las reglas estadísticas de limpieza
+for(col in columnas_gases) {
+  vec <- datos_filtro2_sinsonda[[col]]
+  
+  # Identificar las posiciones exactas de ruido térmico y fallas críticas
+  idx_ruido  <- which(vec < 0 & vec >= umbral_ruido)
+  idx_fallas <- which(vec < umbral_ruido)
+  
+  # Guardar los conteos en la lista
+  reporte_f2[[col]] <- list(ruido = length(idx_ruido), fallas = length(idx_fallas))
+  
+  # A) Ruido térmico a 0
+  vec[idx_ruido] <- 0
+  
+  # B) Fallas críticas de hardware a NA
+  vec[idx_fallas] <- NA
+  
+  # Sobrescribir la columna en la nueva base
+  datos_filtro2_sinsonda[[col]] <- vec
+}
+
+# 5. Reporte final post-filtro 2 con porcentajes
+cat("\n==============================================\n")
+cat("REPORTE SEGUNDO FILTRO: CORRECCIÓN UMBRAL -3.0\n")
+cat("==============================================\n")
+cat(sprintf("Base de cálculo: %d registros válidos (Post-Filtro 1)\n\n", total_valido))
+
+cat("1. Ruido térmico ajustado a 0 (valores entre 0 y -3.0):\n")
+cat(sprintf("- NO  : %d registros corregidos a cero (%.2f%%).\n", reporte_f2$Concentracion_NO$ruido, (reporte_f2$Concentracion_NO$ruido/total_valido)*100))
+cat(sprintf("- NO2 : %d registros corregidos a cero (%.2f%%).\n", reporte_f2$Concentracion_NO2$ruido, (reporte_f2$Concentracion_NO2$ruido/total_valido)*100))
+cat(sprintf("- NOx : %d registros corregidos a cero (%.2f%%).\n", reporte_f2$Concentracion_NOx$ruido, (reporte_f2$Concentracion_NOx$ruido/total_valido)*100))
+
+cat("\n2. Fallas críticas descartadas a NA (valores < -3.0):\n")
+cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NO$fallas, (reporte_f2$Concentracion_NO$fallas/total_valido)*100))
+cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NO2$fallas, (reporte_f2$Concentracion_NO2$fallas/total_valido)*100))
+cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NOx$fallas, (reporte_f2$Concentracion_NOx$fallas/total_valido)*100))
+cat("==============================================\n")
+############################################################################
 
 
 
 
 
-
-# 42iQ con sonda ----
-
-iQ_sonda_archivo_08_14 <- "12218618650_UserData42iQ_2025-08-14_12-34-21_Sonda.csv"
-iQ_sonda_archivo_08_28 <- "12218618650_UserData42iQ_2025-08-28_23-16-34_Sonda.csv"
-iQ_sonda_archivo_10_07 <- "12218618650_UserData42iQ_2025-10-07_13-48-55_Sonda.csv"
-
-iQ_sonda_nombres_orig <- names(read.csv(iQ_sonda_archivo_08_14, nrows = 0, check.names = FALSE))
-
-iQ_sonda_crudos_08_14 <- read.csv(iQ_sonda_archivo_08_14, skip = 1, header = FALSE)
-iQ_sonda_crudos_08_28 <- read.csv(iQ_sonda_archivo_08_28, skip = 1, header = FALSE)
-iQ_sonda_crudos_10_07 <- read.csv(iQ_sonda_archivo_10_07, skip = 1, header = FALSE)
-
-colnames(iQ_sonda_crudos_08_14)[1:length(iQ_sonda_nombres_orig)] <- iQ_sonda_nombres_orig
-colnames(iQ_sonda_crudos_08_28)[1:length(iQ_sonda_nombres_orig)] <- iQ_sonda_nombres_orig
-colnames(iQ_sonda_crudos_10_07)[1:length(iQ_sonda_nombres_orig)] <- iQ_sonda_nombres_orig
-
-# PROCESAMIENTO ARCHIVO 08_14
-iQ_sonda_datos_08_14 <- iQ_sonda_crudos_08_14[, columnas_de_interes]
-colnames(iQ_sonda_datos_08_14) <- nombres_intuitivos
-iQ_sonda_datos_08_14$Fecha_y_Hora <- as.POSIXct(iQ_sonda_datos_08_14$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-# PROCESAMIENTO ARCHIVO 08_28
-iQ_sonda_datos_08_28 <- iQ_sonda_crudos_08_28[, columnas_de_interes]
-colnames(iQ_sonda_datos_08_28) <- nombres_intuitivos
-iQ_sonda_datos_08_28$Fecha_y_Hora <- as.POSIXct(iQ_sonda_datos_08_28$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-# PROCESAMIENTO ARCHIVO 10_07
-iQ_sonda_datos_10_07 <- iQ_sonda_crudos_10_07[, columnas_de_interes]
-colnames(iQ_sonda_datos_10_07) <- nombres_intuitivos
-iQ_sonda_datos_10_07$Fecha_y_Hora <- as.POSIXct(iQ_sonda_datos_10_07$Fecha_y_Hora, format = "%d/%m/%Y %H:%M:%S")
-
-cat("\nAnálisis de integridad (08_14 contenido en 08_28):\n")
-cat("--------------------------------------------------\n")
-verificar_inclusion(iQ_sonda_datos_08_14, iQ_sonda_datos_08_28)
-
-# EXTRACCIÓN PERIODO ESTUDIO CON SONDA (25 JUNIO - 25 JULIO)
-iQ_sonda_datos_periodo <- subset(iQ_sonda_datos_08_28, Fecha_y_Hora >= fecha_inicio & Fecha_y_Hora <= fecha_fin)
-
-cat("\nReporte de parámetros Con Sonda (Límite: 3 min)\n")
-cat("-----------------------------------------------\n")
-cat("NO:\n")
-analizar_falla(iQ_sonda_datos_periodo$Concentracion_NO)
-cat("\nNO2:\n")
-analizar_falla(iQ_sonda_datos_periodo$Concentracion_NO2)
-cat("\nNOx:\n")
-analizar_falla(iQ_sonda_datos_periodo$Concentracion_NOx)
-
-
+# 42iQ con sonda -----------------------####################################
 
 # Igualdad de datos en csv con y sin sonda (24/06 - 24/07) ----
 
@@ -261,6 +243,13 @@ if (filas_sin == filas_con && filas_sin > 0) {
   cat("\nNota: Las bases siguen teniendo distinta cantidad de registros o no hay datos en este corte.\n")
 }
 
+
+
+
+
+
+
+############################################################################
 
 
 
