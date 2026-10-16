@@ -69,6 +69,30 @@ if(contenida_1 & contenida_2) {
 }
 
 
+#medidas de resumen crudas ----
+generar_resumen_estadistico <- function(df, nombre_base) {
+  gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
+  
+  resumen <- data.frame(
+    Gas = c("NO", "NO2", "NOx"),
+    Minimo = sapply(df[gases], min, na.rm = TRUE),
+    Maximo = sapply(df[gases], max, na.rm = TRUE),
+    Promedio = sapply(df[gases], mean, na.rm = TRUE),
+    Mediana = sapply(df[gases], median, na.rm = TRUE),
+    Desv_Estandar = sapply(df[gases], sd, na.rm = TRUE)
+  )
+  rownames(resumen) <- NULL
+  
+  cat("\n========================================================\n")
+  cat("ESTADÍSTICAS:", nombre_base, "\n")
+  cat("========================================================\n")
+  # Imprimir con 4 decimales para mantener la precisión
+  print(format(resumen, digits = 4, nsmall = 4))
+  cat("========================================================\n")
+}
+
+# 2. Ejecutar la función para la base cruda sin sonda
+generar_resumen_estadistico(iQ_sinsonda_datos_totales, "42iQ SIN SONDA (Datos Crudos)")
 #analisis valores constantes ----
 analizar_falla <- function(valores, limite = 4) {
   valores <- na.omit(valores)
@@ -125,6 +149,12 @@ datos_filtro1_sinsonda$Concentracion_NOx <- filtrar_rachas(datos_filtro1_sinsond
 elim_f1_NO  <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NO)) - na_crudos_NO
 elim_f1_NO2 <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NO2)) - na_crudos_NO2
 elim_f1_NOx <- sum(is.na(datos_filtro1_sinsonda$Concentracion_NOx)) - na_crudos_NOx
+
+# 5. Eliminar físicamente de la tabla las filas de calibración
+filas_vacias_sin <- is.na(datos_filtro1_sinsonda$Concentracion_NO) & 
+  is.na(datos_filtro1_sinsonda$Concentracion_NO2) & 
+  is.na(datos_filtro1_sinsonda$Concentracion_NOx)
+datos_filtro1_sinsonda <- datos_filtro1_sinsonda[!filas_vacias_sin, ]
 
 cat("\n==============================================\n")
 cat("REPORTE PRIMER FILTRO: VALORES CONSTANTES (>= 4)\n")
@@ -197,6 +227,9 @@ cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentrac
 cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NO2$fallas, (reporte_f2$Concentracion_NO2$fallas/total_valido)*100))
 cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NOx$fallas, (reporte_f2$Concentracion_NOx$fallas/total_valido)*100))
 cat("==============================================\n")
+#medidas de resumen filtradas ----
+generar_resumen_estadistico(base_final_sinsonda, "42iQ SIN SONDA (Datos Validados Finales)")
+
 ############################################################################
 
 
@@ -278,6 +311,8 @@ cat(sprintf("Total de registros crudos: %d\n", total_crudos_sonda))
 cat(sprintf("Valores NA iniciales -> NO: %d | NO2: %d | NOx: %d\n", 
             na_crudos_NO_sonda, na_crudos_NO2_sonda, na_crudos_NOx_sonda))
 cat("==============================================\n")
+#medidas de resuemen crudas ----
+generar_resumen_estadistico(iQ_sonda_datos_totales, "42iQ CON SONDA (Datos Crudos)")
 #analisis de valores constantes ----
 total_crudos_sonda <- nrow(iQ_sonda_datos_totales)
 datos_filtro1_sonda <- iQ_sonda_datos_totales
@@ -382,6 +417,8 @@ cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Conc
 cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO2$fallas, (reporte_f2_sonda$Concentracion_NO2$fallas/valido_NO2_sonda)*100))
 cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/valido_NOx_sonda)*100))
 cat("==============================================\n")
+#medidas de resuemn filtradas ----
+generar_resumen_estadistico(base_final_sonda, "42iQ CON SONDA (Datos Validados Finales)")
 ############################################################################
 
 
@@ -424,122 +461,83 @@ cat("==============================================\n")
 
 
 # 42i sin sonda -------------------------####################################
-
-#lectura 3 bases ----
-
-# 1. Definir los tres archivos "Sinsonda" de la carpeta
+#lectura de las 3 bases ----
 archivos_dat_sinsonda <- c("NOx_42i_07oct_PO_Sinsonda.dat", 
                            "NOx_42i_Portillo_14_Agosto_2025_Sinsonda.dat",
                            "NOx_42i_Portillo_28_agosto_2025_Sinsonda.dat")
 
-# 2. Función para procesar cada archivo
-leer_y_procesar_dat_sinsonda <- function(archivo) {
-  datos_crudos <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
-  datos_interes <- datos_crudos[, c("Time", "Date", "no", "nox")]
-  
-  # Formatear fecha y hora
-  datos_interes$Fecha_y_Hora <- as.POSIXct(
-    paste(datos_interes$Date, datos_interes$Time), 
-    format = "%m-%d-%y %H:%M"
-  )
-  
-  datos_final <- datos_interes[, c("Fecha_y_Hora", "no", "nox")]
-  colnames(datos_final) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
-  
-  return(datos_final)
-}
+lista_datos_sinsonda <- lapply(archivos_dat_sinsonda, function(archivo) {
+  df <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+  df$Fecha_y_Hora <- as.POSIXct(paste(df$Date, df$Time), format = "%m-%d-%y %H:%M")
+  df_limpio <- df[, c("Fecha_y_Hora", "no", "nox")]
+  colnames(df_limpio) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
+  return(df_limpio)
+})
 
-# 3. Leer los archivos y unirlos en una sola base
-lista_datos_sinsonda <- lapply(archivos_dat_sinsonda, leer_y_procesar_dat_sinsonda)
 i_sinsonda_datos_totales <- do.call(rbind, lista_datos_sinsonda)
 
-# 1. CORRECCIÓN DE TRASLAPES (SOLAPAMIENTO)
-
-# Ordenar toda la base combinada cronológicamente de principio a fin
+# 2. Ordenar y eliminar duplicados exactos de tiempo
 i_sinsonda_datos_totales <- i_sinsonda_datos_totales[order(i_sinsonda_datos_totales$Fecha_y_Hora), ]
-
-# Eliminar duplicados forzando que solo exista un dato por cada Fecha_y_Hora exacta
 i_sinsonda_datos_totales <- i_sinsonda_datos_totales[!duplicated(i_sinsonda_datos_totales$Fecha_y_Hora), ]
 
-# Imprimir en consola la cantidad real de datos únicos
-cat(sprintf("Base de datos unificada y sin duplicados de tiempo: %d registros únicos.\n", nrow(i_sinsonda_datos_totales)))
+total_crudos_42i_sin <- nrow(i_sinsonda_datos_totales)
 
-
-# análisis valores constantes -----
-
-cat("\nReporte de parámetros Base .DAT Sin Sonda (Límite: 3 min)\n")
-cat("-----------------------------------------------\n")
-
-cat("NO:\n")
-analizar_falla(i_sinsonda_datos_periodo$Concentracion_NO)
-
-cat("\nNOx:\n")
-analizar_falla(i_sinsonda_datos_periodo$Concentracion_NOx)
-
-
-
-
-#filtro de negativos ----
-total_valido_sonda <- nrow(datos_filtro1_sonda)
-
-# 2. Conteo de negativos ANTES de aplicar la limpieza
-neg_NO_sonda  <- sum(datos_filtro1_sonda$Concentracion_NO < 0, na.rm = TRUE)
-neg_NO2_sonda <- sum(datos_filtro1_sonda$Concentracion_NO2 < 0, na.rm = TRUE)
-neg_NOx_sonda <- sum(datos_filtro1_sonda$Concentracion_NOx < 0, na.rm = TRUE)
-
-cat("\n==============================================\n")
-cat("DIAGNÓSTICO DE NEGATIVOS (PRE-FILTRO 2) CON SONDA\n")
-cat("==============================================\n")
-cat(sprintf("Base de cálculo: %d registros válidos\n\n", total_valido_sonda))
-cat(sprintf("- NO  : %d registros negativos (%.2f%% del total válido)\n", neg_NO_sonda, (neg_NO_sonda/total_valido_sonda)*100))
-cat(sprintf("- NO2 : %d registros negativos (%.2f%% del total válido)\n", neg_NO2_sonda, (neg_NO2_sonda/total_valido_sonda)*100))
-cat(sprintf("- NOx : %d registros negativos (%.2f%% del total válido)\n", neg_NOx_sonda, (neg_NOx_sonda/total_valido_sonda)*100))
-
-# 3. Crear nueva base para aplicar el segundo filtro de forma segura
-datos_filtro2_sonda <- datos_filtro1_sonda
-umbral_ruido <- -3.0
-columnas_gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
-
-# Lista para almacenar los resultados del filtro y reportarlos luego
-reporte_f2_sonda <- list()
-
-# 4. Aplicar las reglas estadísticas de limpieza
-for(col in columnas_gases) {
-  vec <- datos_filtro2_sonda[[col]]
+#medidas de resumen crudas ----
+generar_resumen_estadistico_42i <- function(df, nombre_base) {
+  gases <- c("Concentracion_NO", "Concentracion_NOx")
   
-  # Identificar las posiciones exactas de ruido térmico y fallas críticas
-  idx_ruido  <- which(vec < 0 & vec >= umbral_ruido)
-  idx_fallas <- which(vec < umbral_ruido)
+  resumen <- data.frame(
+    Gas = c("NO", "NOx"),
+    Minimo = sapply(df[gases], min, na.rm = TRUE),
+    Maximo = sapply(df[gases], max, na.rm = TRUE),
+    Promedio = sapply(df[gases], mean, na.rm = TRUE),
+    Mediana = sapply(df[gases], median, na.rm = TRUE),
+    Desv_Estandar = sapply(df[gases], sd, na.rm = TRUE)
+  )
+  rownames(resumen) <- NULL
   
-  # Guardar los conteos en la lista
-  reporte_f2_sonda[[col]] <- list(ruido = length(idx_ruido), fallas = length(idx_fallas))
-  
-  # A) Ruido térmico a 0
-  vec[idx_ruido] <- 0
-  
-  # B) Fallas críticas de hardware a NA
-  vec[idx_fallas] <- NA
-  
-  # Sobrescribir la columna en la nueva base
-  datos_filtro2_sonda[[col]] <- vec
+  cat("\n========================================================\n")
+  cat("ESTADÍSTICAS:", nombre_base, "\n")
+  cat("========================================================\n")
+  print(format(resumen, digits = 4, nsmall = 4))
+  cat("========================================================\n")
 }
 
-# 5. Reporte final post-filtro 2 con porcentajes
+# 2. Ejecutar la función para la base cruda
+generar_resumen_estadistico_42i(i_sinsonda_datos_totales, "42i SIN SONDA (Datos Crudos)")
+#analisis valores constantes ----
+datos_filtro1_42i_sin <- i_sinsonda_datos_totales
+
+filtrar_rachas <- function(vector_gases, limite = 4) {
+  vector_seguro <- vector_gases
+  vector_seguro[is.na(vector_seguro)] <- -999999
+  rachas <- rle(vector_seguro)
+  es_pegado <- rachas$lengths >= limite
+  es_pegado[rachas$values == -999999] <- FALSE
+  indices_pegados <- rep(es_pegado, rachas$lengths)
+  vector_gases[indices_pegados] <- NA
+  return(vector_gases)
+}
+
+datos_filtro1_42i_sin$Concentracion_NO  <- filtrar_rachas(datos_filtro1_42i_sin$Concentracion_NO, limite = 4)
+datos_filtro1_42i_sin$Concentracion_NOx <- filtrar_rachas(datos_filtro1_42i_sin$Concentracion_NOx, limite = 4)
+
+# Contabilizar válidos y eliminar filas vacías
+valido_NO_42i_sin  <- sum(!is.na(datos_filtro1_42i_sin$Concentracion_NO))
+valido_NOx_42i_sin <- sum(!is.na(datos_filtro1_42i_sin$Concentracion_NOx))
+
+filas_vacias_42i <- is.na(datos_filtro1_42i_sin$Concentracion_NO) & is.na(datos_filtro1_42i_sin$Concentracion_NOx)
+datos_filtro1_42i_sin <- datos_filtro1_42i_sin[!filas_vacias_42i, ]
+
 cat("\n==============================================\n")
-cat("REPORTE SEGUNDO FILTRO: CORRECCIÓN UMBRAL -3.0 (CON SONDA)\n")
+cat("42i SIN SONDA - REPORTE FILTRO 1 (CALIBRACIONES)\n")
 cat("==============================================\n")
-cat(sprintf("Base de cálculo: %d registros válidos (Post-Filtro 1)\n\n", total_valido_sonda))
-
-cat("1. Ruido térmico ajustado a 0 (valores entre 0 y -3.0):\n")
-cat(sprintf("- NO  : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO$ruido, (reporte_f2_sonda$Concentracion_NO$ruido/total_valido_sonda)*100))
-cat(sprintf("- NO2 : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NO2$ruido, (reporte_f2_sonda$Concentracion_NO2$ruido/total_valido_sonda)*100))
-cat(sprintf("- NOx : %d registros corregidos a cero (%.2f%%).\n", reporte_f2_sonda$Concentracion_NOx$ruido, (reporte_f2_sonda$Concentracion_NOx$ruido/total_valido_sonda)*100))
-
-cat("\n2. Fallas críticas descartadas a NA (valores < -3.0):\n")
-cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO$fallas, (reporte_f2_sonda$Concentracion_NO$fallas/total_valido_sonda)*100))
-cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO2$fallas, (reporte_f2_sonda$Concentracion_NO2$fallas/total_valido_sonda)*100))
-cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/total_valido_sonda)*100))
+cat(sprintf("Total de datos crudos: %d\n", total_crudos_42i_sin))
+cat(sprintf("- NO eliminados : %d (Quedan %d válidos)\n", total_crudos_42i_sin - valido_NO_42i_sin, valido_NO_42i_sin))
+cat(sprintf("- NOx eliminados: %d (Quedan %d válidos)\n", total_crudos_42i_sin - valido_NOx_42i_sin, valido_NOx_42i_sin))
 cat("==============================================\n")
+#medidas de resumen filtradas ----
+generar_resumen_estadistico_42i(datos_filtro1_42i_sin, "42i SIN SONDA (Filtro de Valores Constantes)")
 ###############################################################################
 
 
@@ -575,70 +573,30 @@ i_sonda_datos_final <- i_sonda_datos_final[order(i_sonda_datos_final$Fecha_y_Hor
 
 
 
-# extraccion de periodo ----
+#medidas de resumen crudas ----
+generar_resumen_estadistico_42i(i_sonda_datos_final, "42i CON SONDA (Datos Crudos)")
+#analisis de valores constantes ----
+datos_filtro1_42i_sonda <- i_sonda_datos_final
 
-
-# 1. Definir el periodo estricto de prueba
-fecha_inicio_dat <- as.POSIXct("24/06/2025 00:00:00", format="%d/%m/%Y %H:%M:%S")
-fecha_fin_dat <- as.POSIXct("24/07/2025 23:59:59", format="%d/%m/%Y %H:%M:%S")
-
-# 2. Extraer los datos de este periodo
-i_sonda_datos_periodo <- subset(i_sonda_datos_final, Fecha_y_Hora >= fecha_inicio_dat & Fecha_y_Hora <= fecha_fin_dat)
-
-# 3. Cálculos de volumen de datos
-total_datos_crudos <- nrow(i_sonda_datos_final)
-total_datos_periodo <- nrow(i_sonda_datos_periodo)
-porcentaje_uso <- (total_datos_periodo / total_datos_crudos) * 100
-
-# 4. Imprimir Reporte de Conteo
-cat("\n==============================================\n")
-cat("   REPORTE DE VOLUMEN DE DATOS (.DAT CON SONDA)   \n")
-cat("==============================================\n")
-cat(sprintf("Total de registros en los 3 archivos: %d datos\n", total_datos_crudos))
-cat(sprintf("Registros en el periodo (24 Jun - 24 Jul): %d datos\n", total_datos_periodo))
-cat(sprintf("Porcentaje del total a utilizar: %.2f%%\n", porcentaje_uso))
-cat("==============================================\n\n")
-
-
-
-# Análisis de valores constantes ----
-
-
-analizar_falla <- function(valores, limite_minutos = 3) {
-  valores <- na.omit(valores) 
-  
-  if(length(valores) == 0) {
-    cat("No hay datos válidos en este periodo.\n")
-    return()
-  }
-  
-  rachas <- rle(valores)
-  fallas <- rachas$lengths >= limite_minutos
-  
-  if(any(fallas)) {
-    cat("Advertencia: Se registraron valores constantes.\n")
-    print(data.frame(Valor = rachas$values[fallas], 
-                     Minutos_Consecutivos = rachas$lengths[fallas]))
-  } else {
-    cat("Estado normal: Sin anomalías detectadas.\n")
-  }
+filtrar_rachas <- function(vector_gases, limite = 4) {
+  vector_seguro <- vector_gases
+  vector_seguro[is.na(vector_seguro)] <- -999999
+  rachas <- rle(vector_seguro)
+  es_pegado <- rachas$lengths >= limite
+  es_pegado[rachas$values == -999999] <- FALSE
+  indices_pegados <- rep(es_pegado, rachas$lengths)
+  vector_gases[indices_pegados] <- NA
+  return(vector_gases)
 }
 
-# Ejecutar análisis
-cat("Reporte de parámetros Base .DAT (Límite: 3 min)\n")
-cat("-----------------------------------------------\n")
+datos_filtro1_42i_sonda$Concentracion_NO  <- filtrar_rachas(datos_filtro1_42i_sonda$Concentracion_NO, limite = 4)
+datos_filtro1_42i_sonda$Concentracion_NOx <- filtrar_rachas(datos_filtro1_42i_sonda$Concentracion_NOx, limite = 4)
 
-cat("NO:\n")
-analizar_falla(i_sonda_datos_periodo$Concentracion_NO)
-
-cat("\nNOx:\n")
-analizar_falla(i_sonda_datos_periodo$Concentracion_NOx)
-
-
-
-
-
-
+# Eliminar filas completamente vacías
+filas_vacias_sonda <- is.na(datos_filtro1_42i_sonda$Concentracion_NO) & is.na(datos_filtro1_42i_sonda$Concentracion_NOx)
+datos_filtro1_42i_sonda <- datos_filtro1_42i_sonda[!filas_vacias_sonda, ]
+#medidas de resumen filtradas ----
+generar_resumen_estadistico_42i(datos_filtro1_42i_sonda, "42i CON SONDA (Filtro de Valores Constantes)")
 ###############################################################################
 
 
