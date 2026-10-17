@@ -234,8 +234,6 @@ generar_resumen_estadistico(base_final_sinsonda, "42iQ SIN SONDA (Datos Validado
 
 
 
-
-
 # 42iQ con sonda -----------------------####################################
 
 #lectura de las 3 bases ----
@@ -421,8 +419,6 @@ cat("==============================================\n")
 generar_resumen_estadistico(base_final_sonda, "42iQ CON SONDA (Datos Validados Finales)")
 ############################################################################
 
-
-
 #reporte de datos 42iQ con y sin sonda ----
 base_final_sinsonda <- datos_filtro2_sinsonda
 base_final_sonda    <- datos_filtro2_sonda
@@ -539,8 +535,6 @@ cat("==============================================\n")
 #medidas de resumen filtradas ----
 generar_resumen_estadistico_42i(datos_filtro1_42i_sin, "42i SIN SONDA (Filtro de Valores Constantes)")
 ###############################################################################
-
-
 
 
 # 42i con sonda -------------------------####################################
