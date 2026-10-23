@@ -1,6 +1,8 @@
 # =============================================================================
 # GRIMM CETAM vs MT — EDA interactivo
 # Conserva here() global en LabModelacion y trabaja dentro de Analisis_GRIMM_V2.
+
+# SEPARAR EN TAMAÑOS DE MASA (RENDIMIENTO)
 # =============================================================================
 
 pkgs <- c("tidyverse", "readxl", "lubridate", "plotly", "htmlwidgets",
@@ -148,30 +150,44 @@ plot_ba <- function(d, fr) {
                                  bgcolor="rgba(255,255,255,.9)",bordercolor="#999",borderwidth=1,borderpad=4)))
 }
 
+############################# Funcion arreglada
 plot_scatter <- function(d, fr) {
-  if(nrow(d)<2) return(plot_ly() |> layout(title=paste("Datos insuficientes:",fr)))
-  fit <- lm(MT~Cetam,d); xreg <- seq(min(d$Cetam),max(d$Cetam),length.out=100)
-  m <- metrics_for(d,fr); lim <- max(c(d$Cetam,d$MT),na.rm=TRUE)
-  note <- paste0("n = ",nrow(d),"<br>Pearson = ",signif(m$Pearson,4),
-                 "<br>CCC Lin = ",signif(m$CCC_Lin,4),"<br>R² = ",signif(m$R2_OLS,4),
-                 "<br>MAE = ",signif(m$MAE,4),"<br>RMSE = ",signif(m$RMSE,4),
-                 "<br>MT = ",signif(coef(fit)[2],4)," × Cetam ",
-                 ifelse(coef(fit)[1]>=0,"+ ","− "),signif(abs(coef(fit)[1]),4))
-  plot_ly(d,x=~Cetam,y=~MT,type="scatter",mode="markers",
-          text=~paste0("Fecha: ",datetime,"<br>Cetam: ",signif(Cetam,4),
-                       "<br>MT: ",signif(MT,4)),hoverinfo="text",
-          marker=list(size=5,opacity=.55)) |>
-    add_lines(x=xreg,y=predict(fit,newdata=data.frame(Cetam=xreg)),
-              name="Regresión OLS",line=list(color="#d62728",width=2)) |>
-    add_lines(x=c(0,lim),y=c(0,lim),name="Identidad y=x",
-              line=list(color="#222",dash="dash")) |>
-    layout(title=paste("Scatter Cetam vs. MT —",fr),
-           xaxis=list(title="Cetam [µg/m³]",rangemode="tozero"),
-           yaxis=list(title="MT [µg/m³]",rangemode="tozero"),
-           annotations=list(list(x=.02,y=.98,xref="paper",yref="paper",xanchor="left",
-                                 yanchor="top",text=note,showarrow=FALSE,align="left",
-                                 bgcolor="rgba(255,255,255,.9)",bordercolor="#999",borderwidth=1,borderpad=5)))
+  if (nrow(d) < 2) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
+  
+  fit <- lm(MT ~ Cetam, d)
+  xreg <- seq(min(d$Cetam), max(d$Cetam), length.out = 100)
+  yreg <- predict(fit, newdata = data.frame(Cetam = xreg))
+  
+  m <- metrics_for(d, fr)
+  lim <- max(c(d$Cetam, d$MT), na.rm = TRUE)
+  
+  note <- paste0("n = ", nrow(d), "<br>Pearson = ", signif(m$Pearson, 4),
+                 "<br>CCC Lin = ", signif(m$CCC_Lin, 4), "<br>R² = ", signif(m$R2_OLS, 4),
+                 "<br>MAE = ", signif(m$MAE, 4), "<br>RMSE = ", signif(m$RMSE, 4),
+                 "<br>MT = ", signif(coef(fit)[2], 4), " × Cetam ",
+                 ifelse(coef(fit)[1] >= 0, "+ ", "− "), signif(abs(coef(fit)[1]), 4))
+  
+  plot_ly(d, x = ~Cetam, y = ~MT, type = "scatter", mode = "markers",
+          text = ~paste0("Fecha: ", datetime, "<br>Cetam: ", signif(Cetam, 4),
+                         "<br>MT: ", signif(MT, 4)), 
+          hoverinfo = "text",
+          marker = list(size = 5, opacity = .55)) |>
+    add_lines(x = xreg, y = yreg, inherit = FALSE,
+              name = "Regresión OLS", line = list(color = "#d62728", width = 2),
+              hoverinfo = "skip") |>
+    add_lines(x = c(0, lim), y = c(0, lim), inherit = FALSE,
+              name = "Identidad y=x", line = list(color = "#222", dash = "dash"),
+              hoverinfo = "skip") |>
+    layout(title = paste("Scatter Cetam vs. MT —", fr),
+           xaxis = list(title = "Cetam [µg/m³]", rangemode = "tozero"),
+           yaxis = list(title = "MT [µg/m³]", rangemode = "tozero"),
+           annotations = list(list(x = .02, y = .98, xref = "paper", yref = "paper", 
+                                   xanchor = "left", yanchor = "top", text = note, 
+                                   showarrow = FALSE, align = "left",
+                                   bgcolor = "rgba(255,255,255,.9)", 
+                                   bordercolor = "#999", borderwidth = 1, borderpad = 5)))
 }
+#################################
 
 plot_poa <- function(d, fr) {
   if(nrow(d)<2) return(plot_ly() |> layout(title=paste("Datos insuficientes:",fr)))
@@ -225,30 +241,70 @@ plot_ts <- function(fr) {
            yaxis=list(title="Concentración [µg/m³]",autorange=TRUE),hovermode="x unified")
 }
 
-# HTML de concordancia y HTML independientes para las series temporales.
-secciones <- list()
-for(fr in names(cols)) {
+# HTML independientes para cada Mass Value y para cada serie temporal.
+# Cada dashboard contiene únicamente Bland–Altman, PoA y Scatter de una fracción.
+for (fr in names(cols)) {
   d <- pairs_for(fr)
-  ba <- plot_ba(d,fr); sc <- plot_scatter(d,fr); poa <- plot_poa(d,fr)
-  secciones[[length(secciones)+1]] <- tagList(
-    tags$section(style="margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
-                 tags$h2(fr),tags$p(paste("Pares completos:",nrow(d))),
-                 tags$h3("Bland–Altman"),ba,
-                 tags$h3("Probability of Agreement"),
-                 attr(poa,"slider"),poa,
-                 tags$h3("Scatter plot"),sc))
-  saveWidget(plot_ts(fr),file.path(dir_html,paste0("Serie_Temporal_",gsub("\\.","",fr),".html")),
-             selfcontained=TRUE)
+  ba <- plot_ba(d, fr)
+  sc <- plot_scatter(d, fr)
+  poa <- plot_poa(d, fr)
+  
+  dashboard_fr <- tagList(
+    tags$head(
+      tags$meta(charset = "utf-8"),
+      tags$title(paste("GRIMM Cetam vs MT —", fr)),
+      tags$style(HTML(
+        "body{font-family:Arial,sans-serif;max-width:1450px;margin:24px auto;padding:0 18px;color:#222}.plotly{width:100%!important}input[type=range]{accent-color:#d62728}"
+      ))
+    ),
+    tags$h1(paste("Comparación de instrumentos GRIMM: Cetam vs MT —", fr)),
+    tags$p(paste0(
+      "Mass Value: ", fr,
+      " · exclusión superior Q3 + ", MULTIPLICADOR_OUTLIERS,
+      " × IQR · diferencia = MT − Cetam"
+    )),
+    tags$p(paste("Pares completos disponibles:", nrow(d))),
+    tags$p(paste(
+      "PoA es la proporción empírica de pares con |MT − Cetam| menor o igual que la tolerancia seleccionada.",
+      "La autocorrelación temporal puede afectar la inferencia estadística."
+    )),
+    tags$section(
+      style = "margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
+      tags$h2("Bland–Altman"), ba,
+      tags$h2("Probability of Agreement"),
+      attr(poa, "slider"), poa,
+      tags$h2("Scatter plot"), sc
+    )
+  )
+  
+  nombre_fr <- gsub("\\.", "", fr)
+  archivo_dashboard <- file.path(
+    dir_html, paste0("Dashboard_Concordancia_", nombre_fr, ".html")
+  )
+  carpeta_lib <- file.path(
+    dir_html, paste0("Dashboard_Concordancia_", nombre_fr, "_lib")
+  )
+  
+  htmltools::save_html(
+    dashboard_fr,
+    file = archivo_dashboard,
+    libdir = carpeta_lib
+  )
+  
+  # Se conserva además un HTML separado para la serie temporal de cada fracción.
+  htmlwidgets::saveWidget(
+    plot_ts(fr),
+    file.path(dir_html, paste0("Serie_Temporal_", nombre_fr, ".html")),
+    selfcontained = TRUE
+  )
 }
-dashboard <- tagList(
-  tags$head(tags$meta(charset="utf-8"),tags$title("GRIMM Cetam vs MT"),
-            tags$style(HTML("body{font-family:Arial,sans-serif;max-width:1450px;margin:24px auto;padding:0 18px;color:#222}.plotly{width:100%!important}input[type=range]{accent-color:#d62728}"))),
-  tags$h1("Comparación de instrumentos GRIMM: Cetam vs MT"),
-  tags$p(paste0("Mass Values · PM1, PM2.5 y PM10 · exclusión superior Q3 + ",
-                MULTIPLICADOR_OUTLIERS," × IQR · diferencia = MT − Cetam")),
-  tags$p("PoA es la proporción empírica de pares con |MT − Cetam| menor o igual que la tolerancia seleccionada. La autocorrelación temporal puede afectar la inferencia estadística."),
-  secciones)
-save_html(dashboard,file.path(dir_html,"Dashboard_Concordancia_GRIMM.html"),
-          libdir=file.path(dir_html,"Dashboard_Concordancia_GRIMM_lib"))
-cat("\nListo.\nDashboard: ",file.path(dir_html,"Dashboard_Concordancia_GRIMM.html"),
-    "\nSeries temporales: ",dir_html,"\nTablas: ",dir_tablas,"\n",sep="")
+
+cat(
+  "\nListo.\nDashboards de concordancia (uno por Mass Value):\n",
+  paste0(" - ", file.path(dir_html, "Dashboard_Concordancia_PM1.html"), "\n"),
+  paste0(" - ", file.path(dir_html, "Dashboard_Concordancia_PM25.html"), "\n"),
+  paste0(" - ", file.path(dir_html, "Dashboard_Concordancia_PM10.html"), "\n"),
+  "Series temporales: ", dir_html,
+  "\nTablas: ", dir_tablas, "\n",
+  sep = ""
+)

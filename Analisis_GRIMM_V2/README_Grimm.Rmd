@@ -1,0 +1,179 @@
+---
+title: "README_Grimm"
+output: html_document
+---
+
+Análisis y comparación de instrumentos GRIMM: Cetam vs. MT
+
+1. Descripción del proyecto
+
+Este proyecto contiene scripts en R para el procesamiento, análisis exploratorio y comparación de mediciones de material particulado obtenidas mediante dos instrumentos GRIMM: Cetam y MT.
+
+El análisis se centra en tres fracciones de material particulado:
+
+- PM1: partículas con diámetro aerodinámico de hasta 1 µm.
+- PM2.5: partículas con diámetro aerodinámico de hasta 2,5 µm.
+- PM10: partículas con diámetro aerodinámico de hasta 10 µm.
+
+El objetivo es evaluar la concordancia entre ambos instrumentos mediante métricas estadísticas y gráficos interactivos, además de estudiar la distribución de las mediciones y de las diferencias entre equipos.
+
+2. Estructura del proyecto
+
+La carpeta principal del proyecto es Analisis_GRIMM_V2.
+
+
+Analisis_GRIMM_V2/
+├── GRIMM_Cetam_MT_normalidad_mejor.R
+├── Códigos R/
+├── Datos/
+├── Resultados/
+└── README.md
+
+
+Archivos y carpetas relevantes
+
+| Elemento 			    | Función 								   |
+| GRIMM_Cetam_MT_normalidad_mejor.R | Script principal identificado por su nombre y fecha de modificación. |
+| Datos/                            | Carpeta destinada a los archivos de mediciones originales.           |
+| Códigos R/                        | Carpeta de organización de scripts auxiliares. 			   |
+| Resultados/			    | Carpeta destinada a los resultados procesados, tablas y gráficos.    |
+| README.md	                    | Documentación del proyecto. 				           |
+
+3. Datos de entrada
+
+El código revisado utiliza dos archivos Excel:
+
+- GRIMM 11D Cetam 22052025.xlsx
+- GRIMM 11D MT 22052025.xlsx
+
+Ambos se leen desde la carpeta 'Datos/', en la hoja 'Mass values', omitiendo las primeras cuatro filas.
+
+Las columnas relevantes son:
+
+- date&time: fecha y hora de la medición.
+- PM10 [ug/m3]: concentración de PM10.
+- PM2,5 [ug/m3]: concentración de PM2.5.
+- PM1 [ug/m3]: concentración de PM1.
+
+Las fechas se convierten a un formato temporal de R y se conservan las observaciones correspondientes al año 2025.
+
+4. Flujo de procesamiento
+
+El procesamiento sigue estas etapas:
+
+1. Lectura y validación: se cargan los archivos Excel y se comprueba su existencia.
+2. Conversión de datos: las fechas y concentraciones se transforman a tipos adecuados para el análisis.
+3. Tratamiento de valores atípicos: se aplica el criterio configurado en el script.
+4. Agregación temporal: las mediciones de cada instrumento se agrupan en intervalos de UN MINUTO, calculando la media de los valores válidos disponibles para cada fracción de material particulado (PM1, PM2.5 y PM10). De este modo, se obtiene una serie temporal con resolución de un minuto para cada instrumento.
+5. Integración de instrumentos: se combinan los datos de Cetam y MT mediante la fecha y hora redondeadas al minuto.
+6. Comparación estadística: se calculan métricas de correlación, concordancia, sesgo y error.
+7. Análisis de normalidad: se evalúan las distribuciones de las mediciones y de las diferencias pareadas.
+8. Generación de resultados: se exportan tablas y gráficos HTML interactivos.
+
+La unión por minuto permite conservar los registros temporales presentes en cualquiera de los dos instrumentos. Para las comparaciones pareadas se utilizan únicamente las observaciones donde ambos equipos tienen valores finitos.
+
+5. Tratamiento de valores atípicos
+
+El código revisado contempla un criterio de exclusión superior basado en el rango intercuartílico.
+
+El parámetro MULTIPLICADOR_OUTLIERS tiene un valor actual de 5.
+
+También puede incorporarse un umbral absoluto, por ejemplo, eliminar mediciones superiores a 5000 µg/m³. Este método debe seleccionarse explícitamente si está implementado en la versión ejecutada del script.
+
+Los valores excluidos se reemplazan por 'NA' y no se utilizan en los cálculos posteriores que requieren mediciones válidas.
+
+6. Métricas de concordancia
+
+El análisis revisado calcula las siguientes medidas:
+
+| Métrica 	          | Interpretación                                                         			   |
+| Pearson 		  | Asociación lineal entre las mediciones de ambos instrumentos. 				   |
+| R^2 OLS                 | Proporción de variabilidad explicada por la regresión lineal ajustada.                         |
+| CCC de Lin              | Concordancia que considera tanto la correlación como las diferencias respecto de la identidad. |
+| Sesgo medio             | Media de las diferencias MT − Cetam. 							   |
+| Límites de concordancia | Sesgo medio más y menos 1,96 desviaciones estándar de las diferencias.       		   |
+| MAE                     | Error absoluto medio entre los instrumentos. 						   |
+| RMSE                    | Raíz del error cuadrático medio. 								   |
+| PoA                     | Proporción de pares cuya diferencia absoluta no supera una tolerancia determinada.   	   |
+
+Las métricas se calculan por separado para PM1, PM2.5 y PM10.
+
+
+
+7. Análisis de normalidad
+
+El código revisado incluye una prueba de normalidad de Shapiro–Wilk para:
+
+- Mediciones de Cetam.
+- Mediciones de MT.
+- Diferencias pareadas MT − Cetam.
+
+Se utiliza un nivel de significación de 0,05. Si existen más de 5000 observaciones, se toma una muestra reproducible de 5000 datos para realizar la prueba.
+
+Los resultados se interpretan conjuntamente con el histograma y el gráfico Q–Q. Un p-valor pequeño aporta evidencia contra la normalidad, pero no permite determinar por sí solo la calidad de las mediciones ni su independencia temporal.
+
+8. Visualizaciones
+
+El código revisado contempla las siguientes visualizaciones interactivas:
+
+Bland–Altman
+
+Representa las diferencias entre instrumentos frente a sus promedios. Incluye el sesgo medio y los límites de concordancia del 95 %.
+
+Probability of Agreement (PoA)
+
+Representa la proporción de pares con diferencias absolutas inferiores o iguales a una tolerancia. Permite modificar la tolerancia mediante un control interactivo.
+
+Scatter plot
+
+Compara las mediciones de Cetam y MT, incorporando la recta de regresión OLS y la recta de identidad y=x.
+
+Series temporales
+
+Representa la evolución temporal de las concentraciones de ambos instrumentos. Incluye controles para seleccionar intervalos temporales y ajustar la visualización.
+
+Gráficos de normalidad
+
+Incluye histogramas de las diferencias y gráficos Q–Q para examinar su distribución.
+
+9. Resultados y archivos generados
+
+En la implementación revisada, las salidas se organizan bajo Resultados/Resultados Grimm-Cetam-MT/.
+
+| Archivo o carpeta                   | Contenido 							     |
+| datos_minuto.rds                    | Datos integrados y agregados por minuto. 			     |
+| tablas/00_outliers_excluidos.csv    | Número y porcentaje de valores excluidos por instrumento y fracción. |
+| tablas/01_metricas_concordancia.csv | Métricas de concordancia y error. 				     |
+| tablas/02_analisis_normalidad.csv   | Resultados de las pruebas de normalidad.  			     |
+| HTML/                               | Dashboards de concordancia y series temporales. 		     |
+
+Los dashboards se generan por separado para PM1, PM2.5 y PM10. Los nombres exactos de las salidas dependen de la versión del script ejecutado.
+
+Los archivos HTML y CSV que aparecen en la carpeta de trabajo pueden proceder de ejecuciones anteriores o de scripts alternativos. Su presencia no garantiza que el script principal actual los genere.
+
+10. Requisitos de software
+
+Se utiliza R con los siguientes paquetes:
+
+- tidyverse: manipulación de datos y exportación de tablas.
+- readxl: lectura de archivos Excel.
+- lubridate: procesamiento de fechas y horas.
+- plotly: gráficos interactivos.
+- htmlwidgets: exportación de gráficos a HTML.
+- htmltools: construcción y exportación de dashboards.
+- here: gestión de rutas del proyecto.
+- jsonlite: serialización de datos para componentes interactivos.
+- scales: herramientas auxiliares de visualización.
+
+El script revisado instala los paquetes que no estén disponibles y carga las bibliotecas necesarias.
+
+11. Ejecución
+
+1. Colocar los archivos Excel requeridos en Datos/.
+2. Abrir el proyecto desde la carpeta Analisis_GRIMM_V2.
+3. Verificar que las rutas definidas mediante here() correspondan a la estructura local.
+4. Revisar la configuración de exclusión de valores atípicos antes de ejecutar.
+5. Ejecutar el script principal en RStudio.
+6. Consultar las tablas CSV y los dashboards HTML generados.
+
+Si se modifican los criterios de exclusión, conviene regenerar todos los resultados para asegurar que las tablas y los gráficos correspondan al mismo procesamiento.
