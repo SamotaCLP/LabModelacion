@@ -227,6 +227,9 @@ cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentrac
 cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NO2$fallas, (reporte_f2$Concentracion_NO2$fallas/total_valido)*100))
 cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2$Concentracion_NOx$fallas, (reporte_f2$Concentracion_NOx$fallas/total_valido)*100))
 cat("==============================================\n")
+
+base_final_sinsonda <- datos_filtro2_sinsonda
+
 #medidas de resumen filtradas ----
 generar_resumen_estadistico(base_final_sinsonda, "42iQ SIN SONDA (Datos Validados Finales)")
 
@@ -416,8 +419,12 @@ cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Conc
 cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/valido_NOx_sonda)*100))
 cat("==============================================\n")
 #medidas de resuemn filtradas ----
+base_final_sonda    <- datos_filtro1_sonda
 generar_resumen_estadistico(base_final_sonda, "42iQ CON SONDA (Datos Validados Finales)")
 ############################################################################
+
+base_final_sinsonda <- datos_filtro2_sinsonda
+base_final_sonda    <- datos_filtro2_sonda
 
 #reporte de datos 42iQ con y sin sonda ----
 base_final_sinsonda <- datos_filtro2_sinsonda
@@ -593,205 +600,106 @@ datos_filtro1_42i_sonda <- datos_filtro1_42i_sonda[!filas_vacias_sonda, ]
 generar_resumen_estadistico_42i(datos_filtro1_42i_sonda, "42i CON SONDA (Filtro de Valores Constantes)")
 ###############################################################################
 
-
-# COMPARACIÓN DE PATRONES NORMALIZADOS ----
-
-#Función para normalizar entre 0 y 1
-
-normalizar <- function(x) {
-  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-}
-
-datos_validados_sinsonda$NO_norm <- normalizar(datos_validados_sinsonda$Concentracion_NO)
-i_sonda_datos_periodo$NO_norm <- normalizar(i_sonda_datos_periodo$Concentracion_NO)
-
-plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$NO_norm, 
-     type = "l", col = adjustcolor("blue", alpha.f = 0.6), lwd = 2,
-     main = "Comparación de Patrones (Escala Normalizada 0 a 1)", 
-     xlab = "Fecha y Hora", ylab = "Concentración Relativa")
-
-lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$NO_norm, 
-      col = adjustcolor("red", alpha.f = 0.6), lwd = 1.5)
-
-legend("topright", legend = c("Sin Sonda (CSV Validado)", "Con Sonda (DAT)"), 
-       col = c("blue", "red"), lty = 1, lwd = 2, cex = 0.8)
-
-
-#Gráficos (plots) Comparaciones ----
-
-#COMPARACIÓN DE DATOS CRUDOS VS FILTRADOS (NO)
-
-par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
-
-plot(x = iQ_sinsonda_datos_periodo$Fecha_y_Hora, 
-     y = iQ_sinsonda_datos_periodo$Concentracion_NO, 
-     type = "l", col = "gray50", lwd = 1.2,
-     main = "Concentración de NO: Datos Crudos (Sin Filtro)", 
-     xlab = "", ylab = "NO Crudo")
-
-abline(h = 0, col = "red", lty = 2)      # Línea del cero ideal
-abline(h = -3.0, col = "darkred", lty = 3) # Línea del umbral de invalidación (-3.0)
-
-plot(x = datos_validados_sinsonda$Fecha_y_Hora, 
-     y = datos_validados_sinsonda$Concentracion_NO, 
-     type = "l", col = "blue", lwd = 1.2,
-     main = "Concentración de NO: Datos Validados (Umbral -3.0)", 
-     xlab = "Fecha y Hora", ylab = "NO Validado")
-
-abline(h = 0, col = "red", lty = 2)
-par(mfrow = c(1, 1))
-
-
-#GRÁFICO COMPARATIVO 42iQ sin sonda (validado) vs 42i con sonda (.DAT)
-
-# Ajuste de escala para el eje Y
-rango_NO  <- range(c(datos_validados_sinsonda$Concentracion_NO, i_sonda_datos_periodo$Concentracion_NO), na.rm = TRUE)
-rango_NOx <- range(c(datos_validados_sinsonda$Concentracion_NOx, i_sonda_datos_periodo$Concentracion_NOx), na.rm = TRUE)
-
-color_sin_sonda <- adjustcolor("blue", alpha.f = 0.6)
-color_con_sonda <- adjustcolor("red", alpha.f = 0.6)
-
-# 1. Gráfico estático para NO
-plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$Concentracion_NO, 
-     type = "l", col = color_sin_sonda, ylim = rango_NO, lwd = 2,
-     main = "Comparación NO: CSV Validado vs DAT (24/06 - 24/07)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NO")
-lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$Concentracion_NO, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda (Validado)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
-
-# 2. Gráfico estático para NOx
-plot(x = datos_validados_sinsonda$Fecha_y_Hora, y = datos_validados_sinsonda$Concentracion_NOx, 
-     type = "l", col = color_sin_sonda, ylim = rango_NOx, lwd = 2,
-     main = "Comparación NOx: CSV Validado vs DAT (24/06 - 24/07)", 
-     xlab = "Fecha y Hora", ylab = "Concentración de NOx")
-lines(x = i_sonda_datos_periodo$Fecha_y_Hora, y = i_sonda_datos_periodo$Concentracion_NOx, col = color_con_sonda, lwd = 1)
-legend("topright", legend = c("Sin Sonda (Validado)", "Con Sonda (DAT)"), col = c("blue", "red"), lty = 1, lwd = c(2, 1), cex = 0.8)
-
-# Añadir línea de referencia estricta en el cero
-abline(h = 0, col = "black", lty = 2, lwd = 1.5)
-
-
-
-
-# Gráfica .DAT sin sonda
-
-
-# 1. Gráfico Estático
-plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
-     y = i_sonda_datos_periodo$Concentracion_NO, 
-     type = "l", col = "darkgreen", lwd = 1.5,
-     main = "Evaluación de Desfase: NO (DAT con Sonda)", 
-     xlab = "Fecha y Hora", ylab = "Concentración NO")
-
-# Añadir la línea de referencia en Y = 0
-abline(h = 0, col = "red", lty = 2, lwd = 2)
-
-
-
-
-#Gráficos (ploty) ----
-
+#Graficos  --------------#####################################
+#series de tiempo (todos juntos en ploty)----
 library(plotly)
 
-# 1. Gráfico interactivo para NO
-grafico_NO_val <- plot_ly() %>%
-  add_lines(x = ~datos_validados_sinsonda$Fecha_y_Hora, y = ~datos_validados_sinsonda$Concentracion_NO, 
-            name = 'Sin Sonda (Validado)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NO, 
-            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación Interactiva NO (CSV Validado vs DAT)",
+# Gráfico 1: 42iQ Sin Sonda
+g1 <- plot_ly(base_final_sinsonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+              type = 'scatter', mode = 'lines', name = '42iQ Sin Sonda', 
+              line = list(color = 'blue', width = 1.5)) %>%
+  layout(title = "42iQ Sin Sonda", xaxis = list(title = "Fecha"), yaxis = list(title = "NO"))
+
+# Gráfico 2: 42iQ Con Sonda
+g2 <- plot_ly(base_final_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+              type = 'scatter', mode = 'lines', name = '42iQ Con Sonda', 
+              line = list(color = 'red', width = 1.5)) %>%
+  layout(title = "42iQ Con Sonda", xaxis = list(title = "Fecha"), yaxis = list(title = "NO"))
+
+# Gráfico 3: 42i Sin Sonda 
+# (Nota: uso i_sinsonda_datos_totales según la lectura de tu código)
+g3 <- plot_ly(i_sinsonda_datos_totales, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+              type = 'scatter', mode = 'lines', name = '42i Sin Sonda', 
+              line = list(color = 'green', width = 1.5)) %>%
+  layout(title = "42i Sin Sonda", xaxis = list(title = "Fecha"), yaxis = list(title = "NO"))
+
+# Gráfico 4: 42i Con Sonda
+g4 <- plot_ly(i_sonda_datos_periodo, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+              type = 'scatter', mode = 'lines', name = '42i Con Sonda', 
+              line = list(color = 'purple', width = 1.5)) %>%
+  layout(title = "42i Con Sonda", xaxis = list(title = "Fecha"), yaxis = list(title = "NO"))
+
+# --- 2. Gráfico Combinado (Los 4 en uno solo con Range Slider) ---
+
+grafico_combinado <- plot_ly() %>%
+  add_lines(data = base_final_sinsonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+            name = '42iQ Sin Sonda', line = list(color = 'rgba(0, 0, 255, 0.7)', width = 1.5)) %>%
+  add_lines(data = base_final_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+            name = '42iQ Con Sonda', line = list(color = 'rgba(255, 0, 0, 0.7)', width = 1.5)) %>%
+  add_lines(data = i_sinsonda_datos_totales, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+            name = '42i Sin Sonda', line = list(color = 'rgba(0, 128, 0, 0.7)', width = 1.5)) %>%
+  add_lines(data = i_sonda_datos_periodo, x = ~Fecha_y_Hora, y = ~Concentracion_NO, 
+            name = '42i Con Sonda', line = list(color = 'rgba(128, 0, 128, 0.7)', width = 1.5)) %>%
+  layout(title = "Comparativa Global: Equipos NOx con y sin Sonda Termostatizada",
          xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
          yaxis = list(title = "Concentración de NO"))
 
-# 2. Gráfico interactivo para NOx
-grafico_NOx_val <- plot_ly() %>%
-  add_lines(x = ~datos_validados_sinsonda$Fecha_y_Hora, y = ~datos_validados_sinsonda$Concentracion_NOx, 
-            name = 'Sin Sonda (Validado)', line = list(color = 'rgba(0, 0, 255, 0.6)', width = 2)) %>%
-  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, y = ~i_sonda_datos_periodo$Concentracion_NOx, 
-            name = 'Con Sonda (DAT)', line = list(color = 'rgba(255, 0, 0, 0.6)', width = 1)) %>%
-  layout(title = "Comparación Interactiva NOx (CSV Validado vs DAT)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración de NOx"))
-
-# Mostrar gráficos
-grafico_NO_val
-grafico_NOx_val
+# Para visualizarlo en RStudio, simplemente llama a la variable:
+grafico_combinado
 
 
 
-# 2. Gráfico Interactivo (Recomendado para ver la forma de las fluctuaciones)
-library(plotly)
+#graficos separados (plot) ----
 
-grafico_desfase_NO <- plot_ly() %>%
-  add_lines(x = ~i_sonda_datos_periodo$Fecha_y_Hora, 
-            y = ~i_sonda_datos_periodo$Concentracion_NO, 
-            name = 'NO con Sonda (DAT)', 
-            line = list(color = 'darkgreen', width = 1.5)) %>%
-  add_segments(x = min(i_sonda_datos_periodo$Fecha_y_Hora, na.rm = TRUE), 
-               xend = max(i_sonda_datos_periodo$Fecha_y_Hora, na.rm = TRUE), 
-               y = 0, yend = 0, 
-               name = 'Línea de Referencia (Cero)', 
-               line = list(color = 'red', dash = 'dash', width = 2)) %>%
-  layout(title = "Evaluación de Desfase: NO (DAT con Sonda)",
-         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
-         yaxis = list(title = "Concentración NO"))
+#grafica 42iQ sin sonda NO ----
 
-# Mostrar el gráfico interactivo
-grafico_desfase_NO
+#grafica 42iQ sin sonda NOx ----
+
+#grafica 42iQ con sonda NO ----
+
+#grafica 42iQ con sonda NOx ----
 
 
-# ANÁLISIS ESTADÍSTICO (NO y NOx) -----
+#grafica 42i sin sonda NO ----
+plot(x = i_sinsonda_datos_totales$Fecha_y_Hora, 
+     y = i_sinsonda_datos_totales$Concentracion_NO, 
+     type = "l", col = "darkgreen", lwd = 1.5,
+     main = "42i Sin Sonda - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42i sin sonda NOx ----
+plot(x = i_sinsonda_datos_totales$Fecha_y_Hora, 
+     y = i_sinsonda_datos_totales$Concentracion_NOx, 
+     type = "l", col = "darkorange", lwd = 1.5,
+     main = "42i Sin Sonda - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42i con sonda NO ----
+
+plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
+     y = i_sonda_datos_periodo$Concentracion_NO, 
+     type = "l", col = "purple", lwd = 1.5,
+     main = "42i Con Sonda - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
 
 
-# 1. Alinear las bases de datos para NO y NOx simultáneamente
-datos_alineados <- merge(
-  x = iQ_sinsonda_datos_periodo[, c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")],
-  y = i_sonda_datos_periodo[, c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")],
-  by = "Fecha_y_Hora",
-  suffixes = c("_SinSonda", "_ConSonda")
-)
+#grafica 42i con sonda NOx ----
 
-# 2. Modelos de Regresión Lineal (Con Sonda en función de Sin Sonda)
-modelo_NO <- lm(Concentracion_NO_ConSonda ~ Concentracion_NO_SinSonda, data = datos_alineados)
-modelo_NOx <- lm(Concentracion_NOx_ConSonda ~ Concentracion_NOx_SinSonda, data = datos_alineados)
+plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
+     y = i_sonda_datos_periodo$Concentracion_NOx, 
+     type = "l", col = "brown", lwd = 1.5,
+     main = "42i Con Sonda - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
 
-# Extraer coeficientes y formatear las ecuaciones de la recta (y = mx + b)
-coef_NO <- coef(modelo_NO)
-ecuacion_NO <- sprintf("y = %.4fx %s %.4f", coef_NO[2], ifelse(coef_NO[1] >= 0, "+", "-"), abs(coef_NO[1]))
 
-coef_NOx <- coef(modelo_NOx)
-ecuacion_NOx <- sprintf("y = %.4fx %s %.4f", coef_NOx[2], ifelse(coef_NOx[1] >= 0, "+", "-"), abs(coef_NOx[1]))
 
-# Calcular correlaciones de Pearson
-cor_NO <- cor(datos_alineados$Concentracion_NO_SinSonda, datos_alineados$Concentracion_NO_ConSonda, use = "complete.obs")
-cor_NOx <- cor(datos_alineados$Concentracion_NOx_SinSonda, datos_alineados$Concentracion_NOx_ConSonda, use = "complete.obs")
-
-cat(sprintf("Correlación Pearson NO : %.3f\n", cor_NO))
-cat(sprintf("Correlación Pearson NOx: %.3f\n", cor_NOx))
-
-# 3. Configurar la ventana gráfica para mostrar 2 gráficos lado a lado (1 fila, 2 columnas)
-par(mfrow = c(1, 2))
-
-# 4. Gráfico de dispersión para NO
-plot(x = datos_alineados$Concentracion_NO_SinSonda, 
-     y = datos_alineados$Concentracion_NO_ConSonda,
-     pch = 16, col = adjustcolor("purple", alpha.f = 0.3),
-     main = paste("NO (r =", round(cor_NO, 3), ")"),
-     xlab = "NO Sin Sonda", ylab = "NO Con Sonda")
-abline(modelo_NO, col = "red", lwd = 2)
-# Añadir la ecuación en la esquina superior izquierda
-legend("topleft", legend = ecuacion_NO, text.col = "red", bty = "n", cex = 0.9)
-
-# 5. Gráfico de dispersión para NOx
-plot(x = datos_alineados$Concentracion_NOx_SinSonda, 
-     y = datos_alineados$Concentracion_NOx_ConSonda,
-     pch = 16, col = adjustcolor("darkorange", alpha.f = 0.3),
-     main = paste("NOx (r =", round(cor_NOx, 3), ")"),
-     xlab = "NOx Sin Sonda", ylab = "NOx Con Sonda")
-abline(modelo_NOx, col = "red", lwd = 2)
-# Añadir la ecuación en la esquina superior izquierda
-legend("topleft", legend = ecuacion_NOx, text.col = "red", bty = "n", cex = 0.9)
-
-# 6. Restaurar la configuración gráfica a 1 solo panel para futuros gráficos
-par(mfrow = c(1, 1))
-
+#
+#
+#
+#
+#
+#
