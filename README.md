@@ -1,5 +1,5 @@
 PROYECTO MEDICIONES AMBIENTALES 
-por george el heroe
+
 COSAS POR HACER:
 + Sincronizar datos (BC)
   - Histogramas de diferencias
