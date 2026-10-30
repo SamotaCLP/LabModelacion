@@ -931,3 +931,4 @@ plot(x = datos_filtro_final_42i_sonda$Fecha_y_Hora,
      type = "l", col = "brown", lwd = 1.5,
      main = "42i con Sonda (filtro de flag H+filtro de datos ctes+tukey+media movil+normalización) - NOx", 
      xlab = "Fecha y Hora", ylab = "Concentración Relativa de NOx")
+
