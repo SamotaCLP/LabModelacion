@@ -1,12 +1,11 @@
 # =============================================================================
 # GRIMM CETAM vs MT — EDA interactivo, normalidad, concordancia y boxplots
-# Incluye fracciones: TSP, PM10, PM4, PM2.5 y PM1.
+# Versión Optimizada: WebGL (scattergl), Max 15k puntos visuales, Diseño UI
 # Módulo: Boxplots interactivos con sliders de cuantiles y regla Tukey vs Medcouple.
-# Conserva here() global en LabModelacion y trabaja dentro de Analisis_GRIMM_V2.
 # =============================================================================
 
 pkgs <- c("tidyverse", "readxl", "lubridate", "plotly", "htmlwidgets",
-          "htmltools", "here", "jsonlite", "scales")
+          "htmltools", "here", "jsonlite", "scales", "rmarkdown") 
 missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) install.packages(missing)
 invisible(lapply(pkgs, library, character.only = TRUE))
@@ -36,6 +35,7 @@ METODO_OUTLIERS <- "IQR"
 MULTIPLICADOR_OUTLIERS <- 5
 CORTE_SUPERIOR <- 5000
 TOLERANCIA_INICIAL <- 2
+MAX_PUNTOS_VISUALES <- 15000 
 
 mean_na <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 
@@ -180,7 +180,6 @@ widget_boxplots_interactivos <- function(fr) {
   mc_m <- calc_medcouple_subsample(m_vals)
   
   prefix <- paste0("bp_", gsub("[^A-Za-z0-9]", "", fr))
-  div_plot_id <- paste0(prefix, "_plot")
   slider_qinf_id <- paste0(prefix, "_qinf")
   slider_qsup_id <- paste0(prefix, "_qsup")
   val_qinf_id <- paste0(prefix, "_val_qinf")
@@ -193,16 +192,15 @@ widget_boxplots_interactivos <- function(fr) {
   df_comb <- bind_rows(df_c, df_m)
   
   p <- plot_ly(df_comb, x = ~Instrumento, y = ~Valor, color = ~Instrumento,
-               colors = c(Cetam = "#1f77b4", MT = "#ff7f0e"),
-               type = "box", boxmean = TRUE, marker = list(size = 3, opacity = 0.5)) |>
+               colors = c(Cetam = "#3b82f6", MT = "#f97316"),
+               type = "box", boxmean = TRUE, marker = list(size = 3, opacity = 0.4)) |>
     layout(
-      title = paste("Boxplots de mediciones crudas —", fr),
       yaxis = list(title = "Concentración Cruda [µg/m³]"),
-      xaxis = list(title = "Instrumento"),
-      showlegend = FALSE
+      xaxis = list(title = ""),
+      showlegend = FALSE,
+      margin = list(t = 10)
     )
   
-  # JS dinámico para recortar cuantiles y actualizar contadores
   js_code <- sprintf(
     "function(el, x){
       var c_raw = %s, m_raw = %s;
@@ -241,18 +239,11 @@ widget_boxplots_interactivos <- function(fr) {
         var c_filt = c_raw.filter(function(v){ return v >= qinf_c && v <= qsup_c; });
         var m_filt = m_raw.filter(function(v){ return v >= qinf_m && v <= qsup_m; });
         
-        var c_rem_low = c_raw.filter(function(v){ return v < qinf_c; }).length;
-        var c_rem_high = c_raw.filter(function(v){ return v > qsup_c; }).length;
-        var m_rem_low = m_raw.filter(function(v){ return v < qinf_m; }).length;
-        var m_rem_high = m_raw.filter(function(v){ return v > qsup_m; }).length;
-        
-        // Función para contar outliers
         function getOutliers(data, mc) {
           if(data.length < 4) return {tukey:0, hv:0};
           var q25 = quantile(data, 0.25), q75 = quantile(data, 0.75);
           var iqr = q75 - q25;
           var t_low = q25 - 1.5*iqr, t_high = q75 + 1.5*iqr;
-          
           var hv_low = mc >= 0 ? q25 - 1.5*Math.exp(-4*mc)*iqr : q25 - 1.5*Math.exp(-3*mc)*iqr;
           var hv_high = mc >= 0 ? q75 + 1.5*Math.exp(3*mc)*iqr : q75 + 1.5*Math.exp(4*mc)*iqr;
           
@@ -266,17 +257,10 @@ widget_boxplots_interactivos <- function(fr) {
         
         Plotly.restyle(el, {y: [c_filt, m_filt]});
         
-        var t_bold_c = rule === 'tukey' ? '<b>' + c_out.tukey + '</b>' : c_out.tukey;
-        var hv_bold_c = rule === 'hv' ? '<b>' + c_out.hv + '</b>' : c_out.hv;
-        var t_bold_m = rule === 'tukey' ? '<b>' + m_out.tukey + '</b>' : m_out.tukey;
-        var hv_bold_m = rule === 'hv' ? '<b>' + m_out.hv + '</b>' : m_out.hv;
-        
-        info.innerHTML = '<b>Eliminados por recortes de cuantiles:</b><br>' +
-          '• Cetam: ' + c_rem_low + ' (cola inf), ' + c_rem_high + ' (cola sup)<br>' +
-          '• MT: ' + m_rem_low + ' (cola inf), ' + m_rem_high + ' (cola sup)<br><br>' +
-          '<b>Conteo de Outliers (Sobre datos filtrados):</b><br>' +
-          '<b>Cetam</b> (MC = ' + mc_c.toFixed(3) + '): Tukey = ' + t_bold_c + ' | Hubert-Vandervieren = ' + hv_bold_c + '<br>' +
-          '<b>MT</b> (MC = ' + mc_m.toFixed(3) + '): Tukey = ' + t_bold_m + ' | Hubert-Vandervieren = ' + hv_bold_m;
+        info.innerHTML = '<div style=\"display:flex; justify-content:space-between; flex-wrap:wrap; gap:15px;\">' +
+          '<div><b>Eliminados (cuantiles):</b><br>• Cetam: ' + (c_raw.length - c_filt.length) + '<br>• MT: ' + (m_raw.length - m_filt.length) + '</div>' +
+          '<div><b>Outliers Cetam:</b><br>Tukey: ' + (rule==='tukey'?'<b>'+c_out.tukey+'</b>':c_out.tukey) + '<br>H-V: ' + (rule==='hv'?'<b>'+c_out.hv+'</b>':c_out.hv) + '</div>' +
+          '<div><b>Outliers MT:</b><br>Tukey: ' + (rule==='tukey'?'<b>'+m_out.tukey+'</b>':m_out.tukey) + '<br>H-V: ' + (rule==='hv'?'<b>'+m_out.hv+'</b>':m_out.hv) + '</div></div>';
       }
       
       s_inf.addEventListener('input', updateBoxplots);
@@ -292,30 +276,25 @@ widget_boxplots_interactivos <- function(fr) {
   p <- htmlwidgets::onRender(p, js_code)
   
   ctrl_html <- tagList(
-    tags$div(
-      style = "background:#f8f9fa;padding:15px;border-radius:8px;border:1px solid #ddd;margin-bottom:15px;font-size:13px;",
-      tags$div(
-        style = "display:flex;gap:20px;flex-wrap:wrap;align-items:center;",
-        tags$div(
-          tags$label(`for` = slider_qinf_id, "Cuantil inferior (q_inf): "),
-          tags$input(id = slider_qinf_id, type = "range", min = 0, max = 0.10, step = 0.005, value = 0, style = "width:150px;vertical-align:middle;"),
-          tags$span(id = val_qinf_id, style = "font-weight:bold;margin-left:5px;", "0.0%")
-        ),
-        tags$div(
-          tags$label(`for` = slider_qsup_id, "Cuantil superior (q_sup): "),
-          tags$input(id = slider_qsup_id, type = "range", min = 0.90, max = 1.00, step = 0.005, value = 1.00, style = "width:150px;vertical-align:middle;"),
-          tags$span(id = val_qsup_id, style = "font-weight:bold;margin-left:5px;", "100.0%")
-        ),
-        tags$div(
-          tags$label(`for` = select_rule_id, "Regla de Bigotes Activa: "),
-          tags$select(id = select_rule_id, style = "padding:3px 8px;border-radius:4px;border:1px solid #ccc;",
-                      tags$option(value = "hv", "Ajustada (Hubert–Vandervieren con Medcouple MC)"),
-                      tags$option(value = "tukey", "Tukey Estándar (1.5 × IQR)"))
-        )
-      ),
-      tags$hr(style = "margin:10px 0;border:0;border-top:1px solid #eee;"),
-      tags$div(id = info_box_id, style = "color:#333;")
-    )
+    tags$div(class = "control-panel",
+             tags$div(class = "control-group",
+                      tags$label(`for` = slider_qinf_id, "Recorte Inferior: "),
+                      tags$input(id = slider_qinf_id, type = "range", min = 0, max = 0.10, step = 0.005, value = 0),
+                      tags$span(id = val_qinf_id, class = "fw-bold", "0.0%")
+             ),
+             tags$div(class = "control-group",
+                      tags$label(`for` = slider_qsup_id, "Recorte Superior: "),
+                      tags$input(id = slider_qsup_id, type = "range", min = 0.90, max = 1.00, step = 0.005, value = 1.00),
+                      tags$span(id = val_qsup_id, class = "fw-bold", "100.0%")
+             ),
+             tags$div(class = "control-group",
+                      tags$label(`for` = select_rule_id, "Regla de Asimetría: "),
+                      tags$select(id = select_rule_id, class = "ui-select",
+                                  tags$option(value = "hv", "Hubert-Vandervieren (Medcouple)"),
+                                  tags$option(value = "tukey", "Tukey Estándar"))
+             )
+    ),
+    tags$div(id = info_box_id, class = "info-panel")
   )
   
   tagList(ctrl_html, p)
@@ -335,7 +314,7 @@ calc_stats_vec <- function(x) {
     q25 = unname(q[1]), q75 = unname(q[3]), max = max(x, na.rm = TRUE))
 }
 
-summary_stats_html <- function(d, fr) {
+summary_stats_html <- function(d) {
   s_c <- calc_stats_vec(d$Cetam)
   s_m <- calc_stats_vec(d$MT)
   s_d <- calc_stats_vec(d$diferencia)
@@ -356,41 +335,43 @@ summary_stats_html <- function(d, fr) {
   rows_html <- apply(df_summary, 1, function(row) {
     paste0(
       "<tr>",
-      "<td style='padding:8px;border-bottom:1px solid #eee;font-weight:bold;'>", row[["Variable"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["N obs"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Media"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Mediana (Q2)"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Desv. Est. (SD)"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Rango Interc. (IQR)"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Mínimo"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Cuantil 25% (Q1)"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Cuantil 75% (Q3)"]], "</td>",
-      "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["Máximo"]], "</td>",
+      "<td class='fw-bold'>", row[["Variable"]], "</td>",
+      "<td>", row[["N obs"]], "</td>",
+      "<td>", row[["Media"]], "</td>",
+      "<td>", row[["Mediana (Q2)"]], "</td>",
+      "<td>", row[["Desv. Est. (SD)"]], "</td>",
+      "<td>", row[["Rango Interc. (IQR)"]], "</td>",
+      "<td>", row[["Mínimo"]], "</td>",
+      "<td>", row[["Cuantil 25% (Q1)"]], "</td>",
+      "<td>", row[["Cuantil 75% (Q3)"]], "</td>",
+      "<td>", row[["Máximo"]], "</td>",
       "</tr>"
     )
   })
   
   paste0(
-    "<table style='border-collapse:collapse;width:100%;font-size:13px;margin-top:10px;'>",
-    "<thead><tr style='background-color:#f4f6f8;'>",
-    "<th style='text-align:left;padding:8px;border-bottom:2px solid #ccc;'>Variable</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>n</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Media</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Mediana</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>SD</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>IQR</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Mín</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Q1 (25%)</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Q3 (75%)</th>",
-    "<th style='text-align:right;padding:8px;border-bottom:2px solid #ccc;'>Máx</th>",
+    "<div class='table-responsive'>",
+    "<table>",
+    "<thead><tr>",
+    "<th>Variable</th>",
+    "<th>N</th>",
+    "<th>Media</th>",
+    "<th>Mediana</th>",
+    "<th>SD</th>",
+    "<th>IQR</th>",
+    "<th>Mínimo</th>",
+    "<th>Q1 (25%)</th>",
+    "<th>Q3 (75%)</th>",
+    "<th>Máximo</th>",
     "</tr></thead><tbody>",
     paste0(rows_html, collapse = ""),
-    "</tbody>mtable>"
+    "</tbody></table>",
+    "</div>"
   )
 }
 
 # =============================================================================
-# MÉTRICAS Y NORMALIDAD
+# MÉTRICAS Y GRÁFICOS (WEBGL & MUESTREO VISUAL)
 # =============================================================================
 
 metrics_for <- function(d, fr) {
@@ -399,278 +380,329 @@ metrics_for <- function(d, fr) {
   den <- var(d$Cetam) + var(d$MT) + (mean(d$Cetam) - mean(d$MT))^2
   fit <- if (sd(d$Cetam) > 0) lm(MT ~ Cetam, d) else NULL
   bias <- mean(d$diferencia); sdd <- sd(d$diferencia)
-  tibble(fraccion = fr, n = n, media_Cetam = mean(d$Cetam), media_MT = mean(d$MT),
+  
+  tibble(fraccion = fr, n = n, 
+         media_Cetam = mean(d$Cetam), media_MT = mean(d$MT),
          Pearson = if(sd(d$Cetam) > 0 && sd(d$MT) > 0) cor(d$Cetam, d$MT) else NA_real_,
          R2_OLS = if(!is.null(fit)) summary(fit)$r.squared else NA_real_,
          CCC_Lin = if(den > 0) 2 * cov(d$Cetam, d$MT) / den else NA_real_,
-         sesgo_MT_menos_Cetam = bias, LoA_inferior = bias - 1.96 * sdd,
-         LoA_superior = bias + 1.96 * sdd, MAE = mean(abs(d$diferencia)),
+         sesgo_MT_menos_Cetam = bias, 
+         LoA_inferior = bias - 1.96 * sdd,
+         LoA_superior = bias + 1.96 * sdd, 
+         MAE = mean(abs(d$diferencia)),
          RMSE = sqrt(mean(d$diferencia^2)),
-         PoA_1 = mean(d$abs_diferencia <= 1), PoA_2 = mean(d$abs_diferencia <= 2),
-         PoA_5 = mean(d$abs_diferencia <= 5))
+         beta1 = if(!is.null(fit)) coef(fit)[2] else NA_real_, 
+         beta0 = if(!is.null(fit)) coef(fit)[1] else NA_real_)
 }
+
 metrics <- bind_rows(lapply(names(cols), \(fr) metrics_for(pairs_for(fr), fr)))
 write_csv(metrics, file.path(dir_tablas, "01_metricas_concordancia.csv"))
 
-shapiro_safe <- function(x, max_n = 5000, seed = 123) {
-  x <- x[is.finite(x)]
-  n_total <- length(x)
-  if (n_total < 3 || length(unique(x)) < 2) {
-    return(tibble(n = n_total, n_test = NA_integer_, W_Shapiro = NA_real_, p_Shapiro = NA_real_, resultado_05 = "No evaluable"))
-  }
-  x_test <- if (n_total > max_n) { set.seed(seed); sample(x, max_n) } else x
-  test <- shapiro.test(x_test)
-  tibble(n = n_total, n_test = length(x_test), W_Shapiro = unname(test$statistic), p_Shapiro = test$p.value,
-         resultado_05 = if_else(test$p.value < 0.05, "Se rechaza normalidad", "No se rechaza normalidad"))
-}
-
-normality_data <- function(fr) {
-  d <- pairs_for(fr)
-  bind_rows(
-    tibble(fraccion = fr, variable = "Cetam", valor = d$Cetam),
-    tibble(fraccion = fr, variable = "MT", valor = d$MT),
-    tibble(fraccion = fr, variable = "Diferencia (MT - Cetam)", valor = d$diferencia)
-  ) |> group_by(fraccion, variable) |> group_modify(\(.x, .y) shapiro_safe(.x$valor)) |> ungroup()
-}
-
-normality_results <- bind_rows(lapply(names(cols), normality_data))
-write_csv(normality_results, file.path(dir_tablas, "02_analisis_normalidad.csv"))
-
-# =============================================================================
-# FUNCIONES DE GRÁFICOS INTERACTIVOS (PLOTLY)
-# =============================================================================
-
-plot_normality_hist <- function(d, fr) {
-  if (nrow(d) < 3) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
-  plot_ly(d, x = ~diferencia, type = "histogram", nbinsx = 40,
-          marker = list(color = "#4472C4", line = list(color = "white", width = 1)),
-          hovertemplate = "Diferencia: %{x:.4f} µg/m³<br>Frecuencia: %{y}<extra></extra>") |>
-    layout(title = paste("Distribución de las diferencias —", fr),
-           xaxis = list(title = "Diferencia MT − Cetam [µg/m³]"), yaxis = list(title = "Frecuencia"), bargap = 0.08)
-}
-
-plot_normality_qq <- function(d, fr) {
-  x <- d$diferencia[is.finite(d$diferencia)]
-  if (length(x) < 3 || length(unique(x)) < 2) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
-  qq <- qqnorm(x, plot.it = FALSE)
-  y_quartiles <- unname(quantile(x, c(0.25, 0.75), na.rm = TRUE, type = 7))
-  x_quartiles <- qnorm(c(0.25, 0.75))
-  pendiente <- diff(y_quartiles) / diff(x_quartiles)
-  intercepto <- y_quartiles[1] - pendiente * x_quartiles[1]
-  x_linea <- range(qq$x, finite = TRUE)
-  qq_line <- list(x = x_linea, y = intercepto + pendiente * x_linea)
+plot_ba <- function(d) {
+  if(nrow(d) < 2) return(plot_ly() |> layout(title = "Datos insuficientes"))
   
-  plot_ly(x = qq$x, y = qq$y, type = "scatter", mode = "markers", name = "Cuantiles observados",
-          marker = list(size = 5, opacity = 0.6),
-          hovertemplate = "Cuantil teórico: %{x:.3f}<br>Cuantil observado: %{y:.3f}<extra></extra>") |>
-    add_lines(x = qq_line$x, y = qq_line$y, name = "Referencia normal", line = list(color = "#d62728", width = 2), inherit = FALSE, hoverinfo = "skip") |>
-    layout(title = paste("Gráfico Q-Q de las diferencias —", fr), xaxis = list(title = "Cuantiles teóricos normales"), yaxis = list(title = "Cuantiles observados [µg/m³]"))
-}
-
-outlier_note <- function(fr) {
-  z <- outliers |> filter(fraccion == fr)
-  a <- z$pct_excluido[z$instrumento == "Cetam"]
-  b <- z$pct_excluido[z$instrumento == "MT"]
-  paste0("Método: ", outlier_method_label(),
-         "<br>Cetam: ", round(ifelse(length(a), a[1], NA_real_), 2), "% excluido",
-         "<br>MT: ", round(ifelse(length(b), b[1], NA_real_), 2), "% excluido")
-}
-
-plot_ba <- function(d, fr) {
-  if(nrow(d) < 2) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
-  bias <- mean(d$diferencia); s <- sd(d$diferencia)
+  bias <- mean(d$diferencia)
+  s <- sd(d$diferencia)
   xr <- range(d$promedio)
-  plot_ly(d, x = ~promedio, y = ~diferencia, type = "scatter", mode = "markers",
-          text = ~paste0("Fecha: ", datetime, "<br>Cetam: ", signif(Cetam, 4), "<br>MT: ", signif(MT, 4), "<br>MT − Cetam: ", signif(diferencia, 4)),
-          hoverinfo = "text", marker = list(size = 5, opacity = .55)) |>
-    add_segments(x = xr[1], xend = xr[2], y = bias, yend = bias, name = "Sesgo medio", line = list(color = "#d62728", width = 2)) |>
-    add_segments(x = xr[1], xend = xr[2], y = bias + 1.96*s, yend = bias + 1.96*s, name = "Límite superior 95%", line = list(color = "#1f77b4", dash = "dash")) |>
-    add_segments(x = xr[1], xend = xr[2], y = bias - 1.96*s, yend = bias - 1.96*s, name = "Límite inferior 95%", line = list(color = "#1f77b4", dash = "dash")) |>
-    layout(title = paste("Bland–Altman —", fr), xaxis = list(title = "Promedio (Cetam + MT)/2 [µg/m³]"), yaxis = list(title = "Diferencia MT − Cetam [µg/m³]"),
-           annotations = list(list(x = .99, y = .99, xref = "paper", yref = "paper", xanchor = "right", yanchor = "top",
-                                   text = outlier_note(fr), showarrow = FALSE, align = "right", bgcolor = "rgba(255,255,255,.9)", bordercolor = "#999", borderwidth = 1, borderpad = 4)))
+  
+  # Muestreo visual para WebGL
+  d_plot <- if (nrow(d) > MAX_PUNTOS_VISUALES) d[sample(nrow(d), MAX_PUNTOS_VISUALES), ] else d
+  
+  plot_ly(d_plot, x = ~promedio, y = ~diferencia, type = "scattergl", mode = "markers",
+          hovertemplate = "Promedio: %{x:.2f}<br>Diferencia: %{y:.2f}<extra></extra>",
+          marker = list(size = 4, opacity = 0.5, color = "#64748b")) |>
+    add_segments(x = xr[1], xend = xr[2], y = bias, yend = bias, name = "Sesgo medio", line = list(color = "#dc2626", width = 2)) |>
+    add_segments(x = xr[1], xend = xr[2], y = bias + 1.96*s, yend = bias + 1.96*s, name = "Lím. Sup. 95%", line = list(color = "#3b82f6", dash = "dash")) |>
+    add_segments(x = xr[1], xend = xr[2], y = bias - 1.96*s, yend = bias - 1.96*s, name = "Lím. Inf. 95%", line = list(color = "#3b82f6", dash = "dash")) |>
+    layout(xaxis = list(title = "Promedio (Cetam + MT)/2 [µg/m³]"), 
+           yaxis = list(title = "Diferencia MT − Cetam [µg/m³]"), 
+           showlegend = TRUE, margin = list(t = 10))
 }
 
 plot_scatter <- function(d, fr) {
-  if (nrow(d) < 2) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
-  fit <- lm(MT ~ Cetam, d)
-  xreg <- seq(min(d$Cetam), max(d$Cetam), length.out = 100)
-  yreg <- predict(fit, newdata = data.frame(Cetam = xreg))
+  if (nrow(d) < 2) return(plot_ly() |> layout(title = "Datos insuficientes"))
+  
   m <- metrics_for(d, fr)
   lim <- max(c(d$Cetam, d$MT), na.rm = TRUE)
-  note <- paste0("n = ", nrow(d), "<br>Pearson = ", signif(m$Pearson, 4),
-                 "<br>CCC Lin = ", signif(m$CCC_Lin, 4), "<br>R² = ", signif(m$R2_OLS, 4),
-                 "<br>MAE = ", signif(m$MAE, 4), "<br>RMSE = ", signif(m$RMSE, 4),
-                 "<br>MT = ", signif(coef(fit)[2], 4), " × Cetam ",
-                 ifelse(coef(fit)[1] >= 0, "+ ", "− "), signif(abs(coef(fit)[1]), 4))
   
-  plot_ly(d, x = ~Cetam, y = ~MT, type = "scatter", mode = "markers",
-          text = ~paste0("Fecha: ", datetime, "<br>Cetam: ", signif(Cetam, 4), "<br>MT: ", signif(MT, 4)),
-          hoverinfo = "text", marker = list(size = 5, opacity = .55)) |>
-    add_lines(x = xreg, y = yreg, inherit = FALSE, name = "Regresión OLS", line = list(color = "#d62728", width = 2), hoverinfo = "skip") |>
-    add_lines(x = c(0, lim), y = c(0, lim), inherit = FALSE, name = "Identidad y=x", line = list(color = "#222", dash = "dash"), hoverinfo = "skip") |>
-    layout(title = paste("Scatter Cetam vs. MT —", fr), xaxis = list(title = "Cetam [µg/m³]", rangemode = "tozero"), yaxis = list(title = "MT [µg/m³]", rangemode = "tozero"),
-           annotations = list(list(x = .02, y = .98, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top", text = note,
-                                   showarrow = FALSE, align = "left", bgcolor = "rgba(255,255,255,.9)", bordercolor = "#999", borderwidth = 1, borderpad = 5)))
+  # Muestreo visual (WebGL)
+  d_plot <- if (nrow(d) > MAX_PUNTOS_VISUALES) d[sample(nrow(d), MAX_PUNTOS_VISUALES), ] else d
+  
+  # Línea OLS calculada con TODA la base
+  xreg <- c(0, max(d$Cetam))
+  yreg <- m$beta0 + m$beta1 * xreg
+  
+  note <- paste0(
+    "<b>N Total:</b> ", scales::comma(nrow(d)), "<br>",
+    "<b>R² OLS:</b> ", signif(m$R2_OLS, 4), "<br>",
+    "<b>CCC Lin:</b> ", signif(m$CCC_Lin, 4), "<br>",
+    "<b>MAE:</b> ", signif(m$MAE, 4), "<br>",
+    "<b>RMSE:</b> ", signif(m$RMSE, 4)
+  )
+  
+  if(nrow(d) > MAX_PUNTOS_VISUALES) {
+    note <- paste0(note, "<br><br><i>(Visualizando ", scales::comma(MAX_PUNTOS_VISUALES), " pts)</i>")
+  }
+  
+  plot_ly(d_plot, x = ~Cetam, y = ~MT, type = "scattergl", mode = "markers",
+          hovertemplate = "Cetam: %{x:.2f}<br>MT: %{y:.2f}<extra></extra>",
+          marker = list(size = 4, opacity = 0.5, color = "#64748b")) |>
+    add_lines(x = xreg, y = yreg, name = "Regresión OLS", line = list(color = "#dc2626", width = 2), hoverinfo = "skip") |>
+    add_lines(x = c(0, lim), y = c(0, lim), name = "Identidad y=x", line = list(color = "#1e293b", dash = "dash"), hoverinfo = "skip") |>
+    layout(xaxis = list(title = "Cetam [µg/m³]", rangemode = "tozero"), 
+           yaxis = list(title = "MT [µg/m³]", rangemode = "tozero"),
+           showlegend = FALSE, margin = list(t = 10),
+           annotations = list(list(
+             x = 0.05, y = 0.95, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+             text = note, showarrow = FALSE, align = "left", 
+             bgcolor = "rgba(255,255,255,0.9)", bordercolor = "#cbd5e1", borderwidth = 1, borderpad = 8
+           )))
 }
 
 plot_poa <- function(d, fr) {
-  if(nrow(d) < 2) return(plot_ly() |> layout(title = paste("Datos insuficientes:", fr)))
+  if(nrow(d) < 2) return(plot_ly() |> layout(title = "Datos insuficientes"))
   dd <- d$abs_diferencia
   xmax <- max(TOLERANCIA_INICIAL, as.numeric(quantile(dd, .99, na.rm = TRUE)), 1)
-  ts <- seq(0, xmax, length.out = 301)
-  ps <- vapply(ts, \(t) mean(dd <= t), numeric(1))
+  
+  # Resolución suave para WebGL
+  ts <- seq(0, xmax, length.out = 150) 
+  ps <- vapply(ts, function(t) mean(dd <= t), numeric(1))
   tol0 <- min(TOLERANCIA_INICIAL, xmax)
   
   p <- plot_ly(x = ts, y = ps, type = "scatter", mode = "lines", name = "PoA",
-               line = list(color = "#1f77b4", width = 3),
-               hovertemplate = "Tolerancia: %{x:.3f} µg/m³<br>PoA: %{y:.2%}<extra></extra>") |>
-    layout(title = paste("Probability of Agreement —", fr),
-           xaxis = list(title = "Tolerancia absoluta |MT − Cetam| [µg/m³]", range = c(0, xmax)),
+               line = list(color = "#3b82f6", width = 3),
+               hovertemplate = "Tolerancia: ±%{x:.2f} µg/m³<br>PoA: %{y:.2%}<extra></extra>") |>
+    layout(xaxis = list(title = "Tolerancia absoluta |MT − Cetam| [µg/m³]", range = c(0, xmax)),
            yaxis = list(title = "Probabilidad empírica", tickformat = ".0%", range = c(0, 1)),
+           margin = list(t = 10),
            shapes = list(list(type = "line", xref = "x", yref = "paper", x0 = tol0, x1 = tol0, y0 = 0, y1 = 1,
-                              line = list(color = "#d62728", width = 2, dash = "dash"))))
+                              line = list(color = "#dc2626", width = 2, dash = "dash"))))
   
   sid <- paste0("tol_", gsub("[^A-Za-z0-9]", "", fr))
   vid <- paste0(sid, "_value")
-  p <- onRender(p, sprintf(
+  
+  # Inyección JavaScript para el slider
+  p <- htmlwidgets::onRender(p, sprintf(
     "function(el,x){
-      var s=document.getElementById('%s'),v=document.getElementById('%s');
-      if(!s)return;
-      var ts=%s,ps=%s;
-      function upd(){var t=+s.value,i=0;while(i+1<ts.length&&ts[i+1]<=t)i++;
-        Plotly.relayout(el,{'shapes[0].x0':t,'shapes[0].x1':t});
-        v.textContent='±'+t.toFixed(2)+' µg/m³; PoA = '+(100*ps[i]).toFixed(2)+'%%';}
-      s.addEventListener('input',upd);upd();
+      var s=document.getElementById('%s'), v=document.getElementById('%s');
+      if(!s) return;
+      var ts=%s, ps=%s;
+      function upd(){
+        var t=+s.value, i=0;
+        while(i+1<ts.length && ts[i+1]<=t) i++;
+        Plotly.relayout(el,{'shapes[0].x0':t, 'shapes[0].x1':t});
+        v.textContent='±'+t.toFixed(2)+' µg/m³; PoA = '+(100*ps[i]).toFixed(2)+'%%';
+      }
+      s.addEventListener('input', upd);
+      upd();
     }", sid, vid, jsonlite::toJSON(ts, auto_unbox = TRUE), jsonlite::toJSON(ps, auto_unbox = TRUE)))
   
-  attr(p, "slider") <- tagList(tags$label(`for` = sid, paste0("Tolerancia para ", fr, ": ")),
-                               tags$input(id = sid, type = "range", min = 0, max = xmax, step = max(xmax/500, .01), value = tol0, style = "width:70%;"),
-                               tags$span(id = vid, style = "margin-left:12px;font-weight:bold;"))
-  p
-}
-
-plot_ts <- function(fr, tipo = c("limpia", "cruda")) {
-  tipo <- match.arg(tipo)
-  base <- if (tipo == "cruda") merged_raw else merged
-  cc <- cols[[fr]]
-  d <- base |> select(datetime, Cetam = all_of(cc[1]), MT = all_of(cc[2])) |>
-    pivot_longer(c(Cetam, MT), names_to = "instrumento", values_to = "valor") |> filter(!is.na(datetime))
-  
-  subtitulo <- if (tipo == "cruda") "Datos crudos: sin eliminación de outliers; promedio por minuto" else paste0("Datos limpios; método: ", outlier_method_label(), "; promedio por minuto")
-  
-  anotaciones <- list()
-  if (tipo == "limpia") {
-    z <- outliers |> filter(fraccion == fr)
-    pct_c <- z$pct_excluido[z$instrumento == "Cetam"]
-    pct_m <- z$pct_excluido[z$instrumento == "MT"]
-    n_c <- z$n_excluido[z$instrumento == "Cetam"]
-    n_m <- z$n_excluido[z$instrumento == "MT"]
-    anotaciones <- list(list(
-      x = 0.99, y = 0.99, xref = "paper", yref = "paper", xanchor = "right", yanchor = "top", showarrow = FALSE, align = "left",
-      text = paste0("<b>Datos excluidos</b><br>", "Método: ", outlier_method_label(), "<br>",
-                    "Cetam: ", if (length(pct_c) && is.finite(pct_c[1])) sprintf("%.2f%%", pct_c[1]) else "N/D", " (", if (length(n_c)) n_c[1] else "N/D", " med.)<br>",
-                    "MT: ", if (length(pct_m) && is.finite(pct_m[1])) sprintf("%.2f%%", pct_m[1]) else "N/D", " (", if (length(n_m)) n_m[1] else "N/D", " med.)"),
-      bgcolor = "rgba(255,255,255,0.92)", bordercolor = "#777", borderwidth = 1, borderpad = 7, font = list(size = 12, color = "#222")
-    ))
-  }
-  
-  plot_ly(d, x = ~datetime, y = ~valor, color = ~instrumento, colors = c(Cetam = "#1f77b4", MT = "#ff7f0e"), type = "scatter", mode = "lines", connectgaps = FALSE) |>
-    layout(title = list(text = paste0("Serie temporal ", tipo, " — ", fr, "<br><sup>", subtitulo, "</sup>")),
-           xaxis = list(title = "Fecha", type = "date", rangeslider = list(visible = TRUE),
-                        rangeselector = list(buttons = list(
-                          list(count = 1, label = "1 día", step = "day", stepmode = "backward"),
-                          list(count = 7, label = "1 semana", step = "day", stepmode = "backward"),
-                          list(count = 1, label = "1 mes", step = "month", stepmode = "backward"),
-                          list(step = "all", label = "Todo")))),
-           yaxis = list(title = "Concentración [µg/m³]", autorange = TRUE), annotations = anotaciones, hovermode = "x unified")
+  # Guardar el HTML del slider como atributo
+  attr(p, "slider") <- tagList(
+    tags$div(class = "control-panel", style = "margin-bottom: 10px; padding: 12px;",
+             tags$div(class = "control-group",
+                      tags$label(`for` = sid, "Tolerancia elegida: "),
+                      tags$input(id = sid, type = "range", min = 0, max = xmax, step = max(xmax/300, 0.01), value = tol0),
+                      tags$span(id = vid, class = "fw-bold", style = "color: #0369a1; margin-left: 10px;")
+             )
+    )
+  )
+  return(p)
 }
 
 # =============================================================================
-# GENERACIÓN DE DASHBOARDS HTML Y SERIES TEMPORALES
+# GENERACIÓN DE DASHBOARDS HTML (DISEÑO UI + RMARKDOWN AUTOCONTENIDO)
 # =============================================================================
+
+css_styles <- HTML("
+  :root { --primary: #2563eb; --bg: #f8fafc; --card-bg: #ffffff; --text: #0f172a; --border: #e2e8f0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+  .dashboard-container { max-width: 1400px; margin: 0 auto; }
+  .header { padding-bottom: 20px; margin-bottom: 30px; border-bottom: 2px solid var(--border); }
+  .header h1 { color: var(--primary); font-size: 2.2rem; font-weight: 700; margin-bottom: 5px; }
+  .header p { color: #64748b; margin: 0; font-size: 1.1rem; }
+  .card { background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
+  .card-title { font-size: 1.25rem; font-weight: 600; color: var(--text); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  @media(min-width: 1024px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  .table-responsive { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+  th { background: #f1f5f9; padding: 12px; font-weight: 600; border-bottom: 2px solid var(--border); }
+  td { padding: 12px; border-bottom: 1px solid var(--border); }
+  tr:hover { background: #f8fafc; }
+  .fw-bold { font-weight: 600; }
+  .control-panel { background: #f1f5f9; padding: 16px; border-radius: 8px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; font-size: 14px;}
+  .control-group { display: flex; align-items: center; gap: 8px; }
+  .ui-select { padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; outline: none; }
+  .info-panel { font-size: 13.5px; background: #e0f2fe; padding: 12px 16px; border-radius: 8px; border: 1px solid #bae6fd; color: #0369a1; }
+  .plotly { border-radius: 8px; }
+")
 
 for (fr in names(cols)) {
   d <- pairs_for(fr)
-  ba <- plot_ba(d, fr)
-  sc <- plot_scatter(d, fr)
-  poa <- plot_poa(d, fr)
-  hist_normalidad <- plot_normality_hist(d, fr)
-  qq_normalidad <- plot_normality_qq(d, fr)
-  normalidad_fr <- normality_results |> filter(fraccion == fr)
   
-  table_summary_html <- summary_stats_html(d, fr)
-  widget_bp <- widget_boxplots_interactivos(fr)
+  # --- EXTRAER CANTIDAD DE OUTLIERS GLOBALES ELIMINADOS ---
+  z <- outliers |> filter(fraccion == fr)
+  n_c <- if(length(z$n_excluido[z$instrumento == "Cetam"])) z$n_excluido[z$instrumento == "Cetam"] else 0
+  pct_c <- if(length(z$pct_excluido[z$instrumento == "Cetam"])) z$pct_excluido[z$instrumento == "Cetam"] else 0
+  n_m <- if(length(z$n_excluido[z$instrumento == "MT"])) z$n_excluido[z$instrumento == "MT"] else 0
+  pct_m <- if(length(z$pct_excluido[z$instrumento == "MT"])) z$pct_excluido[z$instrumento == "MT"] else 0
   
-  dashboard_fr <- tagList(
-    tags$head(tags$meta(charset = "utf-8"), tags$title(paste("GRIMM Cetam vs MT —", fr)),
-              tags$style(HTML("body{font-family:Arial,sans-serif;max-width:1450px;margin:24px auto;padding:0 18px;color:#222}.plotly{width:100%!important}input[type=range]{accent-color:#d62728}"))),
-    tags$h1(paste("Comparación de instrumentos GRIMM: Cetam vs MT —", fr)),
-    tags$p(paste0("Mass Value: ", fr, " · método de outliers: ", outlier_method_label(), " · diferencia = MT − Cetam")),
-    tags$p(paste("Pares completos disponibles:", nrow(d))),
-    
-    # SECCIÓN 1: ESTADÍSTICOS DESCRIPTIVOS
-    tags$section(
-      style = "margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
-      tags$h2("Estadísticos Descriptivos y Resumen de la Muestra"),
-      tags$p("Tendencia central (Media, Mediana), Variabilidad (SD, IQR), Rango (Mín, Máx) y Cuartiles (Q1, Q3) expresados en [µg/m³]."),
-      htmltools::HTML(table_summary_html)
-    ),
-    
-    # SECCIÓN 2: BOXPLOTS INTERACTIVOS CON SLIDERS DE CUANTILES
-    tags$section(
-      style = "margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
-      tags$h2("Boxplots de mediciones crudas · Cetam vs MT (Controles Dinámicos)"),
-      tags$p("Usa los deslizadores para ajustar los recortes de cuantiles (q_inf y q_sup) y selecciona la regla de bigotes para evaluar asimetría y outliers."),
-      widget_bp
-    ),
-    
-    # SECCIÓN 3: NORMALIDAD
-    tags$section(
-      style = "margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
-      tags$h2("Análisis de normalidad"),
-      tags$p("Prueba de Shapiro–Wilk para Cetam, MT y las diferencias pareadas (α = 0,05)."),
-      htmltools::HTML(paste0(
-        "<table style='border-collapse:collapse;width:100%;'>",
-        "<thead><tr>",
-        "<th style='text-align:left;padding:8px;border-bottom:1px solid #ccc;'>Variable</th>",
-        "<th style='text-align:right;padding:8px;border-bottom:1px solid #ccc;'>n</th>",
-        "<th style='text-align:right;padding:8px;border-bottom:1px solid #ccc;'>n evaluado</th>",
-        "<th style='text-align:right;padding:8px;border-bottom:1px solid #ccc;'>W</th>",
-        "<th style='text-align:right;padding:8px;border-bottom:1px solid #ccc;'>p-valor</th>",
-        "<th style='text-align:left;padding:8px;border-bottom:1px solid #ccc;'>Conclusión (α = 0,05)</th>",
-        "</tr></thead><tbody>",
-        paste0(apply(normalidad_fr, 1, function(row) {
-          paste0("<tr><td style='padding:8px;border-bottom:1px solid #eee;'>", row[["variable"]], "</td>",
-                 "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["n"]], "</td>",
-                 "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", row[["n_test"]], "</td>",
-                 "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", ifelse(is.na(as.numeric(row[["W_Shapiro"]])), "NA", signif(as.numeric(row[["W_Shapiro"]]), 5)), "</td>",
-                 "<td style='text-align:right;padding:8px;border-bottom:1px solid #eee;'>", ifelse(is.na(as.numeric(row[["p_Shapiro"]])), "NA", format.pval(as.numeric(row[["p_Shapiro"]]), digits = 4)), "</td>",
-                 "<td style='padding:8px;border-bottom:1px solid #eee;'>", row[["resultado_05"]], "</td></tr>")
-        }), collapse = ""),
-        "</tbody></table>"
-      )),
-      tags$p("Revisa también el histograma y el gráfico Q-Q para complementar el p-valor."),
-      hist_normalidad, qq_normalidad
-    ),
-    
-    # SECCIÓN 4: CONCORDANCIA
-    tags$section(
-      style = "margin:24px 0;padding:18px;border:1px solid #ddd;border-radius:10px;",
-      tags$h2("Bland–Altman"), ba,
-      tags$h2("Probability of Agreement"), attr(poa, "slider"), poa,
-      tags$h2("Scatter plot"), sc
+  # --- OBTENER PLOT Y SLIDER PoA ---
+  poa_plot <- plot_poa(d, fr)
+  poa_slider <- attr(poa_plot, "slider")
+  
+  ui <- tagList(
+    tags$style(css_styles),
+    tags$div(class = "dashboard-container",
+             tags$div(class = "header",
+                      tags$h1(paste("GRIMM Análisis de Concordancia:", fr)),
+                      tags$p(HTML(paste0(
+                        "Cetam vs MT • Límite outliers: ", outlier_method_label(), " • Pares Completos: ", scales::comma(nrow(d)), "<br>",
+                        "<span style='color:#dc2626;'><b>Outliers globales eliminados:</b> Cetam = ", n_c, " (", sprintf("%.2f", pct_c), "%), MT = ", n_m, " (", sprintf("%.2f", pct_m), "%)</span>"
+                      )))
+             ),
+             
+             tags$div(class = "grid-2",
+                      tags$div(class = "card",
+                               tags$div(class = "card-title", "Estadísticas Descriptivas"),
+                               tags$p("Se calculan sobre el 100% de la muestra filtrada.", style="font-size:13px; color:#64748b; margin-top:-10px;"),
+                               HTML(summary_stats_html(d))
+                      ),
+                      tags$div(class = "card",
+                               tags$div(class = "card-title", "Boxplots Crudos & Reglas de Asimetría"),
+                               widget_boxplots_interactivos(fr)
+                      )
+             ),
+             
+             tags$div(class = "grid-2",
+                      tags$div(class = "card",
+                               tags$div(class = "card-title", "Gráfico Bland-Altman (WebGL)"),
+                               plot_ba(d)
+                      ),
+                      tags$div(class = "card",
+                               tags$div(class = "card-title", "Gráfico de Dispersión OLS (WebGL)"),
+                               plot_scatter(d, fr)
+                      )
+             ),
+             
+             tags$div(class = "card",
+                      tags$div(class = "card-title", "Probability of Agreement (PoA)"),
+                      poa_slider, # <--- SLIDER INYECTADO AQUÍ
+                      poa_plot
+             )
     )
   )
   
   nombre_fr <- gsub("\\.", "", fr)
-  archivo_dashboard <- file.path(dir_html, paste0("Dashboard_Concordancia_", nombre_fr, ".html"))
-  carpeta_lib <- file.path(dir_html, paste0("Dashboard_Concordancia_", nombre_fr, "_lib"))
+  archivo_dashboard <- paste0("Dashboard_Concordancia_", nombre_fr, ".html")
+  temp_rds <- file.path(dir_html, paste0("temp_", nombre_fr, ".rds"))
+  rmd_file <- file.path(dir_html, paste0("temp_", nombre_fr, ".Rmd"))
   
-  htmltools::save_html(dashboard_fr, file = archivo_dashboard, libdir = carpeta_lib)
+  # Exportación RMarkdown Autocontenida (YAML Corregido)
+  saveRDS(ui, temp_rds)
+  writeLines(c(
+    "---", 
+    paste0("title: 'GRIMM - ", fr, "'"),
+    "output:",
+    "  html_document:",
+    "    self_contained: true",
+    "    theme: null",
+    "    mathjax: null",
+    "params:",
+    "  rds_path: ''", 
+    "---",
+    "```{r, echo=FALSE, warning=FALSE, message=FALSE}",
+    "library(htmltools); library(plotly); readRDS(params$rds_path)", 
+    "```"
+  ), rmd_file)
   
-  htmlwidgets::saveWidget(plot_ts(fr, "limpia"), file.path(dir_html, paste0("Serie_Temporal_Limpia_", nombre_fr, ".html")), selfcontained = TRUE)
-  htmlwidgets::saveWidget(plot_ts(fr, "cruda"), file.path(dir_html, paste0("Serie_Temporal_Cruda_", nombre_fr, ".html")), selfcontained = TRUE)
+  rmarkdown::render(rmd_file, output_file = archivo_dashboard, output_dir = dir_html, params = list(rds_path = temp_rds), quiet = TRUE)
+  
+  unlink(rmd_file)
+  unlink(temp_rds)
 }
 
-cat("\nDashboards generados con sliders interactivos de cuantiles y regla de bigotes para: TSP, PM10, PM4, PM2.5 y PM1.\nUbicación HTML: ", dir_html, "\n", sep = "")
+cat("\nEjecución finalizada.\nPaneles UI Modernos generados con WebGL (scattergl). Max 15k ptos visuales.\nUbicación HTML: ", dir_html, "\n", sep = "")
+
+
+# =============================================================================
+# DASHBOARD DE SERIES TEMPORALES UNIFICADO (PESTAÑAS/BOTONES)
+# =============================================================================
+
+generar_serie_temporal_tabs <- function(d_limpia, d_cruda, tipo = "limpia") {
+  d_plot <- if(tipo == "limpia") d_limpia else d_cruda
+  
+  fracciones <- c("TSP", "PM10", "PM4", "PM2.5", "PM1")
+  cols_c <- c("TSP_C", "PM10_C", "PM4_C", "PM25_C", "PM1_C")
+  cols_m <- c("TSP_M", "PM10_M", "PM4_M", "PM25_M", "PM1_M")
+  
+  # Iniciar gráfico vacío
+  p <- plot_ly(d_plot, x = ~datetime)
+  
+  # Añadir trazas usando "scatter" (SVG) para que el rangeslider las pueda renderizar
+  for(i in 1:length(fracciones)) {
+    vis <- if(i == 1) TRUE else FALSE
+    p <- p |> 
+      add_trace(y = as.formula(paste0("~", cols_c[i])), 
+                name = paste("Cetam", fracciones[i]), 
+                type = "scatter", mode = "lines", visible = vis,
+                line = list(color = "#3b82f6", width = 1.5)) |>
+      add_trace(y = as.formula(paste0("~", cols_m[i])), 
+                name = paste("MT", fracciones[i]), 
+                type = "scatter", mode = "lines", visible = vis,
+                line = list(color = "#f97316", width = 1.5))
+  }
+  
+  # Lógica de los botones
+  botones <- lapply(1:length(fracciones), function(i) {
+    vis_array <- rep(FALSE, length(fracciones) * 2)
+    vis_array[c(i*2 - 1, i*2)] <- TRUE 
+    list(
+      method = "restyle",
+      args = list("visible", vis_array),
+      label = fracciones[i]
+    )
+  })
+  
+  subtitulo <- if(tipo == "cruda") "Datos crudos (sin eliminar outliers)" else "Datos limpios (outliers removidos)"
+  
+  p <- p |> layout(
+    title = list(text = paste0("<b>Series Temporales de Concentración</b><br><sup>", subtitulo, "</sup>")),
+    xaxis = list(
+      title = "Fecha", type = "date", 
+      rangeslider = list(visible = TRUE),
+      rangeselector = list(buttons = list(
+        list(count = 1, label = "1 día", step = "day", stepmode = "backward"),
+        list(count = 7, label = "1 semana", step = "day", stepmode = "backward"),
+        list(step = "all", label = "Todo")
+      ))
+    ),
+    yaxis = list(title = "Concentración [µg/m³]"),
+    hovermode = "x unified",
+    margin = list(t = 85), # Margen para evitar solapamiento
+    updatemenus = list(
+      list(
+        type = "buttons",
+        direction = "right",
+        x = 0.0, y = 1.15,          # Movido a la izquierda
+        xanchor = "left", yanchor = "bottom",
+        pad = list(r = 10, t = 10),
+        showactive = TRUE,
+        buttons = botones,
+        bgcolor = "#f8fafc",
+        bordercolor = "#cbd5e1",
+        font = list(color = "#0f172a")
+      )
+    )
+  )
+  return(p)
+}
+
+# Exportar el HTML de las series unificadas
+cat("\nGenerando dashboard de series temporales unificado...\n")
+ts_limpia_html <- generar_serie_temporal_tabs(merged, merged_raw, "limpia")
+ts_cruda_html <- generar_serie_temporal_tabs(merged, merged_raw, "cruda")
+
+htmlwidgets::saveWidget(ts_limpia_html, file.path(dir_html, "Series_Temporales_Limpias_Todas.html"), selfcontained = TRUE)
+htmlwidgets::saveWidget(ts_cruda_html, file.path(dir_html, "Series_Temporales_Crudas_Todas.html"), selfcontained = TRUE)
