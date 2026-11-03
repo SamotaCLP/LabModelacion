@@ -1,7 +1,7 @@
 # =============================================================================
 # GRIMM CETAM vs MT — EDA interactivo, normalidad, concordancia y boxplots
 # Versión Optimizada: WebGL (scattergl), Max 15k puntos visuales, Diseño UI
-# Módulo: Boxplots interactivos con sliders de cuantiles y regla Tukey vs Medcouple.
+# Dashboard Maestro Unificado (Pestañas HTML) + Series Temporales
 # =============================================================================
 
 pkgs <- c("tidyverse", "readxl", "lubridate", "plotly", "htmlwidgets",
@@ -511,198 +511,383 @@ plot_poa <- function(d, fr) {
 }
 
 # =============================================================================
-# GENERACIÓN DE DASHBOARDS HTML (DISEÑO UI + RMARKDOWN AUTOCONTENIDO)
+# GENERACIÓN DE DASHBOARDS HTML (DISEÑO UI PREMIUM + RMARKDOWN AUTOCONTENIDO)
 # =============================================================================
 
 css_styles <- HTML("
   :root { --primary: #2563eb; --bg: #f8fafc; --card-bg: #ffffff; --text: #0f172a; --border: #e2e8f0; }
-  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 40px 20px; line-height: 1.5; }
   .dashboard-container { max-width: 1400px; margin: 0 auto; }
-  .header { padding-bottom: 20px; margin-bottom: 30px; border-bottom: 2px solid var(--border); }
-  .header h1 { color: var(--primary); font-size: 2.2rem; font-weight: 700; margin-bottom: 5px; }
-  .header p { color: #64748b; margin: 0; font-size: 1.1rem; }
-  .card { background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
-  .card-title { font-size: 1.25rem; font-weight: 600; color: var(--text); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 24px; }
-  @media(min-width: 1024px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  
+  .header { padding-bottom: 24px; margin-bottom: 32px; border-bottom: 2px solid var(--border); }
+  .header h1, .header h2 { color: var(--text); font-size: 2.2rem; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.5px; }
+  .header p { color: #64748b; margin: 0; font-size: 1.1rem; line-height: 1.6; }
+  
+  .card { background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
+  .card-title { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  
+  .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  @media(min-width: 1024px) { .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .grid-2 > .card { min-width: 0; overflow: hidden; }
+  .card .html-widget, .card .plotly, .card .js-plotly-plot { max-width: 100%; }
+  
   .table-responsive { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
-  th { background: #f1f5f9; padding: 12px; font-weight: 600; border-bottom: 2px solid var(--border); }
-  td { padding: 12px; border-bottom: 1px solid var(--border); }
-  tr:hover { background: #f8fafc; }
+  th { background: #f8fafc; padding: 14px 16px; font-weight: 600; border-bottom: 2px solid var(--border); color: #475569; }
+  td { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  tr:hover { background: #f1f5f9; }
   .fw-bold { font-weight: 600; }
-  .control-panel { background: #f1f5f9; padding: 16px; border-radius: 8px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; font-size: 14px;}
-  .control-group { display: flex; align-items: center; gap: 8px; }
-  .ui-select { padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; outline: none; }
-  .info-panel { font-size: 13.5px; background: #e0f2fe; padding: 12px 16px; border-radius: 8px; border: 1px solid #bae6fd; color: #0369a1; }
-  .plotly { border-radius: 8px; }
+  
+  .control-panel { background: #f8fafc; padding: 16px 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+  .control-group { display: flex; align-items: center; gap: 12px; font-weight: 500; color: #475569; font-size: 14px; }
+  .ui-select { padding: 8px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; outline: none; font-weight: 500; cursor: pointer; }
+  .info-panel { font-size: 14px; background: #eff6ff; padding: 16px; border-radius: 12px; border: 1px solid #bfdbfe; color: #1e3a8a; line-height: 1.6; }
+  
+  /* Pestañas UI Modernas (Estilo iOS / Segmented Control) */
+  .tab-container { display: inline-flex; background: #e2e8f0; padding: 6px; border-radius: 12px; gap: 4px; margin-bottom: 32px; }
+  .tab-btn { background: transparent; color: #64748b; border: none; padding: 10px 28px; font-size: 1.05rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+  .tab-btn:hover { color: #0f172a; }
+  .tab-btn.active { background: #ffffff; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
+  .tab-content { display: none; animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+  .tab-content.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 ")
 
-for (fr in names(cols)) {
+js_tabs <- HTML("
+  <script>
+    function resizeTabPlots(tabId) {
+      var tab = document.getElementById(tabId);
+      if (!tab || typeof Plotly === 'undefined') return;
+      tab.querySelectorAll('.js-plotly-plot').forEach(function(gd) {
+        Plotly.relayout(gd, {autosize: true});
+        Plotly.Plots.resize(gd);
+      });
+    }
+
+    function openTab(evt, tabId) {
+      var contents = document.getElementsByClassName('tab-content');
+      for (var i = 0; i < contents.length; i++) {
+        contents[i].style.display = 'none';
+        contents[i].classList.remove('active');
+      }
+      var links = document.getElementsByClassName('tab-btn');
+      for (var i = 0; i < links.length; i++) {
+        links[i].classList.remove('active');
+      }
+      var current = document.getElementById(tabId);
+      current.style.display = 'block';
+      current.classList.add('active');
+      evt.currentTarget.classList.add('active');
+
+      // Redimensionar los gráficos de la pestaña recién visible
+      requestAnimationFrame(function() {
+        resizeTabPlots(tabId);
+        setTimeout(function() { resizeTabPlots(tabId); }, 100);
+      });
+    }
+  </script>
+")
+
+# 1. Crear los botones de las pestañas
+tabs_buttons <- tags$div(class = "tab-container",
+                         lapply(names(cols), function(fr) {
+                           tags$button(class = paste("tab-btn", if(fr == "TSP") "active" else ""),
+                                       onclick = sprintf("openTab(event, 'tab_%s')", gsub("\\.", "", fr)),
+                                       fr)
+                         })
+)
+
+# 2. Generar el contenido (plots y tablas) para cada fracción
+cat("\nGenerando pestañas para Dashboard Maestro...\n")
+tab_contents <- lapply(names(cols), function(fr) {
   d <- pairs_for(fr)
   
-  # --- EXTRAER CANTIDAD DE OUTLIERS GLOBALES ELIMINADOS ---
   z <- outliers |> filter(fraccion == fr)
   n_c <- if(length(z$n_excluido[z$instrumento == "Cetam"])) z$n_excluido[z$instrumento == "Cetam"] else 0
   pct_c <- if(length(z$pct_excluido[z$instrumento == "Cetam"])) z$pct_excluido[z$instrumento == "Cetam"] else 0
   n_m <- if(length(z$n_excluido[z$instrumento == "MT"])) z$n_excluido[z$instrumento == "MT"] else 0
   pct_m <- if(length(z$pct_excluido[z$instrumento == "MT"])) z$pct_excluido[z$instrumento == "MT"] else 0
   
-  # --- OBTENER PLOT Y SLIDER PoA ---
   poa_plot <- plot_poa(d, fr)
   poa_slider <- attr(poa_plot, "slider")
   
-  ui <- tagList(
-    tags$style(css_styles),
-    tags$div(class = "dashboard-container",
-             tags$div(class = "header",
-                      tags$h1(paste("GRIMM Análisis de Concordancia:", fr)),
-                      tags$p(HTML(paste0(
-                        "Cetam vs MT • Límite outliers: ", outlier_method_label(), " • Pares Completos: ", scales::comma(nrow(d)), "<br>",
-                        "<span style='color:#dc2626;'><b>Outliers globales eliminados:</b> Cetam = ", n_c, " (", sprintf("%.2f", pct_c), "%), MT = ", n_m, " (", sprintf("%.2f", pct_m), "%)</span>"
-                      )))
-             ),
-             
-             tags$div(class = "grid-2",
-                      tags$div(class = "card",
-                               tags$div(class = "card-title", "Estadísticas Descriptivas"),
-                               tags$p("Se calculan sobre el 100% de la muestra filtrada.", style="font-size:13px; color:#64748b; margin-top:-10px;"),
-                               HTML(summary_stats_html(d))
-                      ),
-                      tags$div(class = "card",
-                               tags$div(class = "card-title", "Boxplots Crudos & Reglas de Asimetría"),
-                               widget_boxplots_interactivos(fr)
-                      )
-             ),
-             
-             tags$div(class = "grid-2",
-                      tags$div(class = "card",
-                               tags$div(class = "card-title", "Gráfico Bland-Altman (WebGL)"),
-                               plot_ba(d)
-                      ),
-                      tags$div(class = "card",
-                               tags$div(class = "card-title", "Gráfico de Dispersión OLS (WebGL)"),
-                               plot_scatter(d, fr)
-                      )
-             ),
-             
-             tags$div(class = "card",
-                      tags$div(class = "card-title", "Probability of Agreement (PoA)"),
-                      poa_slider, # <--- SLIDER INYECTADO AQUÍ
-                      poa_plot
-             )
-    )
+  tags$div(id = paste0("tab_", gsub("\\.", "", fr)), 
+           class = paste("tab-content", if(fr == "TSP") "active" else ""),
+           style = if(fr != "TSP") "display:none;" else "",
+           
+           tags$div(class = "header",
+                    tags$h2(paste("Análisis:", fr)),
+                    tags$p(HTML(paste0(
+                      "Cetam vs MT • Límite outliers: ", outlier_method_label(), " • Pares Completos: ", scales::comma(nrow(d)), "<br>",
+                      "<span style='color:#dc2626;'><b>Excluidos:</b> Cetam = ", n_c, " (", sprintf("%.2f", pct_c), "%), MT = ", n_m, " (", sprintf("%.2f", pct_m), "%)</span>"
+                    )))
+           ),
+           
+           tags$div(class = "grid-2",
+                    tags$div(class = "card",
+                             tags$div(class = "card-title", "Estadísticas Descriptivas"),
+                             HTML(summary_stats_html(d))
+                    ),
+                    tags$div(class = "card",
+                             tags$div(class = "card-title", "Boxplots y Asimetría"),
+                             widget_boxplots_interactivos(fr)
+                    )
+           ),
+           
+           tags$div(class = "grid-2",
+                    tags$div(class = "card",
+                             tags$div(class = "card-title", "Bland-Altman"),
+                             plot_ba(d)
+                    ),
+                    tags$div(class = "card",
+                             tags$div(class = "card-title", "Dispersión OLS"),
+                             plot_scatter(d, fr)
+                    )
+           ),
+           
+           tags$div(class = "card",
+                    tags$div(class = "card-title", "Probability of Agreement (PoA)"),
+                    poa_slider,
+                    poa_plot
+           )
   )
-  
-  nombre_fr <- gsub("\\.", "", fr)
-  archivo_dashboard <- paste0("Dashboard_Concordancia_", nombre_fr, ".html")
-  temp_rds <- file.path(dir_html, paste0("temp_", nombre_fr, ".rds"))
-  rmd_file <- file.path(dir_html, paste0("temp_", nombre_fr, ".Rmd"))
-  
-  # Exportación RMarkdown Autocontenida (YAML Corregido)
-  saveRDS(ui, temp_rds)
-  writeLines(c(
-    "---", 
-    paste0("title: 'GRIMM - ", fr, "'"),
-    "output:",
-    "  html_document:",
-    "    self_contained: true",
-    "    theme: null",
-    "    mathjax: null",
-    "params:",
-    "  rds_path: ''", 
-    "---",
-    "```{r, echo=FALSE, warning=FALSE, message=FALSE}",
-    "library(htmltools); library(plotly); readRDS(params$rds_path)", 
-    "```"
-  ), rmd_file)
-  
-  rmarkdown::render(rmd_file, output_file = archivo_dashboard, output_dir = dir_html, params = list(rds_path = temp_rds), quiet = TRUE)
-  
-  unlink(rmd_file)
-  unlink(temp_rds)
-}
+})
 
-cat("\nEjecución finalizada.\nPaneles UI Modernos generados con WebGL (scattergl). Max 15k ptos visuales.\nUbicación HTML: ", dir_html, "\n", sep = "")
+# 3. Ensamblar la UI principal
+ui_maestro <- tagList(
+  tags$style(css_styles),
+  js_tabs,
+  tags$div(class = "dashboard-container",
+           tabs_buttons,
+           tagList(tab_contents)
+  )
+)
+
+# 4. Exportar el Dashboard Maestro
+archivo_dashboard <- file.path(dir_html, "Dashboard_Maestro_Concordancia.html")
+temp_rds <- file.path(dir_html, "temp_maestro.rds")
+rmd_file <- file.path(dir_html, "temp_maestro.Rmd")
+
+saveRDS(ui_maestro, temp_rds)
+writeLines(c(
+  "---", 
+  "title: 'Dashboard Maestro GRIMM'",
+  "output:",
+  "  html_document:",
+  "    self_contained: true",
+  "    theme: null",
+  "    mathjax: null",
+  "params:",
+  "  rds_path: ''", 
+  "---",
+  "```{r, echo=FALSE, warning=FALSE, message=FALSE}",
+  "library(htmltools); library(plotly); readRDS(params$rds_path)", 
+  "```"
+), rmd_file)
+rmarkdown::render(rmd_file, output_file = archivo_dashboard, output_dir = dir_html, params = list(rds_path = temp_rds), quiet = TRUE)
+unlink(rmd_file); unlink(temp_rds)
+
+cat("Dashboard Maestro generado con éxito.\n")
 
 
 # =============================================================================
-# DASHBOARD DE SERIES TEMPORALES UNIFICADO (PESTAÑAS/BOTONES)
+# DASHBOARDS DE SERIES TEMPORALES (Envueltos en diseño UI)
 # =============================================================================
 
-generar_serie_temporal_tabs <- function(d_limpia, d_cruda, tipo = "limpia") {
+
+exportar_serie_temporal_ui <- function(d_limpia, d_cruda, tipo, filename) {
+  
   d_plot <- if(tipo == "limpia") d_limpia else d_cruda
   
   fracciones <- c("TSP", "PM10", "PM4", "PM2.5", "PM1")
   cols_c <- c("TSP_C", "PM10_C", "PM4_C", "PM25_C", "PM1_C")
   cols_m <- c("TSP_M", "PM10_M", "PM4_M", "PM25_M", "PM1_M")
   
-  # Iniciar gráfico vacío
   p <- plot_ly(d_plot, x = ~datetime)
   
-  # Añadir trazas usando "scatter" (SVG) para que el rangeslider las pueda renderizar
   for(i in 1:length(fracciones)) {
     vis <- if(i == 1) TRUE else FALSE
     p <- p |> 
-      add_trace(y = as.formula(paste0("~", cols_c[i])), 
-                name = paste("Cetam", fracciones[i]), 
-                type = "scatter", mode = "lines", visible = vis,
-                line = list(color = "#3b82f6", width = 1.5)) |>
-      add_trace(y = as.formula(paste0("~", cols_m[i])), 
-                name = paste("MT", fracciones[i]), 
-                type = "scatter", mode = "lines", visible = vis,
-                line = list(color = "#f97316", width = 1.5))
+      add_trace(
+        y = as.formula(paste0("~", cols_c[i])), 
+        name = paste("Cetam", fracciones[i]), 
+        type = "scatter", mode = "lines", visible = vis,
+        line = list(color = "#3b82f6", width = 1.5)
+      ) |>
+      add_trace(
+        y = as.formula(paste0("~", cols_m[i])), 
+        name = paste("MT", fracciones[i]), 
+        type = "scatter", mode = "lines", visible = vis,
+        line = list(color = "#f97316", width = 1.5)
+      )
   }
   
-  # Lógica de los botones
+  # Botones originales (sin cambios)
   botones <- lapply(1:length(fracciones), function(i) {
     vis_array <- rep(FALSE, length(fracciones) * 2)
     vis_array[c(i*2 - 1, i*2)] <- TRUE 
-    list(
-      method = "restyle",
-      args = list("visible", vis_array),
-      label = fracciones[i]
-    )
+    list(method = "restyle", args = list("visible", vis_array), label = fracciones[i])
   })
   
-  subtitulo <- if(tipo == "cruda") "Datos crudos (sin eliminar outliers)" else "Datos limpios (outliers removidos)"
-  
   p <- p |> layout(
-    title = list(text = paste0("<b>Series Temporales de Concentración</b><br><sup>", subtitulo, "</sup>")),
+    autosize = TRUE,
+    height = NULL,
     xaxis = list(
-      title = "Fecha", type = "date", 
+      title = "Fecha",
+      type = "date",
       rangeslider = list(visible = TRUE),
-      rangeselector = list(buttons = list(
-        list(count = 1, label = "1 día", step = "day", stepmode = "backward"),
-        list(count = 7, label = "1 semana", step = "day", stepmode = "backward"),
-        list(step = "all", label = "Todo")
-      ))
+      rangeselector = list(
+        buttons = list(
+          list(count = 1, label = "1 día", step = "day", stepmode = "backward"),
+          list(count = 7, label = "1 semana", step = "day", stepmode = "backward"),
+          list(step = "all", label = "Todo")
+        )
+      )
     ),
-    yaxis = list(title = "Concentración [µg/m³]"),
+    yaxis = list(title = "Concentración [µg/m³]", automargin = TRUE),
     hovermode = "x unified",
-    margin = list(t = 85), # Margen para evitar solapamiento
+    margin = list(l = 75, r = 30, t = 90, b = 65),
     updatemenus = list(
       list(
-        type = "buttons",
-        direction = "right",
-        x = 0.0, y = 1.15,          # Movido a la izquierda
-        xanchor = "left", yanchor = "bottom",
-        pad = list(r = 10, t = 10),
-        showactive = TRUE,
+        type = "buttons", direction = "right",
+        x = 0, y = 1.15, xanchor = "left", yanchor = "bottom",
+        pad = list(r = 10, t = 10), showactive = TRUE,
         buttons = botones,
-        bgcolor = "#f8fafc",
-        bordercolor = "#cbd5e1",
+        bgcolor = "#ffffff", bordercolor = "#cbd5e1",
         font = list(color = "#0f172a")
       )
     )
+  ) |> config(responsive = TRUE)
+  
+  # ---------------------------------------------------------------------------
+  # INFO DE OUTLIERS POR FRACCIÓN (se actualiza al cambiar de botón)
+  # ---------------------------------------------------------------------------
+  info_list <- lapply(fracciones, function(fr) {
+    z <- outliers |> filter(fraccion == fr)
+    g <- function(inst, col) {
+      v <- z[[col]][z$instrumento == inst]
+      if (length(v)) as.numeric(v[1]) else NA_real_
+    }
+    list(c_n = g("Cetam", "n_excluido"), c_pct = g("Cetam", "pct_excluido"), c_tot = g("Cetam", "n_original"),
+         m_n = g("MT", "n_excluido"),    m_pct = g("MT", "pct_excluido"),    m_tot = g("MT", "n_original"))
+  })
+  names(info_list) <- fracciones
+  
+  js_info <- paste0(
+    "function(el, x){
+      var info = ", jsonlite::toJSON(info_list, auto_unbox = TRUE, na = "null"), ";
+      var tipo = '", tipo, "';
+      var crit = ", jsonlite::toJSON(outlier_method_label(), auto_unbox = TRUE), ";
+      var box = document.getElementById('ts-info');
+      if (!box) return;
+      
+      function fmt(n){ return (n === null || n === undefined) ? '–' : Number(n).toLocaleString('es-CL'); }
+      function pct(v){ return (v === null || v === undefined) ? '–' : Number(v).toFixed(2) + ' %'; }
+      
+      function render(fr){
+        var d = info[fr]; if (!d) return;
+        var titulo = (tipo === 'limpia')
+          ? 'Outliers eliminados · ' + fr
+          : 'Datos crudos (sin eliminar) · ' + fr + ' — outliers que se excluirían al limpiar';
+        box.innerHTML =
+          '<div class=\"ts-info-title\">' + titulo + '</div>' +
+          '<div class=\"ts-info-item\"><span class=\"dot\" style=\"background:#3b82f6\"></span><b>Cetam:</b> ' +
+            fmt(d.c_n) + ' de ' + fmt(d.c_tot) + ' registros (' + pct(d.c_pct) + ')</div>' +
+          '<div class=\"ts-info-item\"><span class=\"dot\" style=\"background:#f97316\"></span><b>MT:</b> ' +
+            fmt(d.m_n) + ' de ' + fmt(d.m_tot) + ' registros (' + pct(d.m_pct) + ')</div>' +
+          '<div class=\"ts-info-crit\">Criterio: ' + crit + '</div>';
+      }
+      
+      render('TSP');
+      el.on('plotly_buttonclicked', function(e){
+        if (e && e.button && e.button.label) render(e.button.label);
+      });
+    }"
   )
-  return(p)
+  p <- htmlwidgets::onRender(p, js_info)
+  
+  # ---------------------------------------------------------------------------
+  # HTML: barra de info arriba + gráfico ocupando el resto de la pantalla
+  # ---------------------------------------------------------------------------
+  ui_ts <- tagList(
+    tags$head(
+      tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+      tags$style(HTML("
+        html, body { width: 100%; height: 100%; margin: 0 !important; padding: 0 !important; overflow: hidden; }
+        body { font-family: Arial, sans-serif; background: white; }
+        
+        .ts-root {
+          position: fixed; inset: 0;
+          display: flex; flex-direction: column;
+          background: white;
+        }
+        
+        .ts-info {
+          flex: 0 0 auto;
+          display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px;
+          padding: 10px 20px;
+          background: #eff6ff; border-bottom: 1px solid #bfdbfe;
+          color: #1e3a8a; font-size: 14px;
+        }
+        .ts-info-title { font-weight: 700; }
+        .ts-info-item { display: flex; align-items: center; gap: 6px; }
+        .ts-info-item .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .ts-info-crit { color: #475569; font-size: 13px; margin-left: auto; }
+        
+        .ts-plot { flex: 1 1 auto; min-height: 0; position: relative; }
+        .ts-plot .html-widget,
+        .ts-plot .js-plotly-plot,
+        .ts-plot .plotly {
+          position: absolute; top: 0; left: 0;
+          width: 100% !important; height: 100% !important;
+        }
+      "))
+    ),
+    tags$div(
+      class = "ts-root",
+      tags$div(id = "ts-info", class = "ts-info"),
+      tags$div(class = "ts-plot", p)
+    )
+  )
+  
+  # Exportación autocontenida (sin cambios)
+  temp_rds <- file.path(dir_html, paste0("temp_ts_", tipo, ".rds"))
+  rmd_file <- file.path(dir_html, paste0("temp_ts_", tipo, ".Rmd"))
+  
+  saveRDS(ui_ts, temp_rds)
+  
+  writeLines(c(
+    "---",
+    "output:",
+    "  html_document:",
+    "    self_contained: true",
+    "    theme: null",
+    "    mathjax: null",
+    "    includes:",
+    "      in_header: null",
+    "params:",
+    "  rds_path: ''",
+    "---",
+    "```{r, echo=FALSE, warning=FALSE, message=FALSE}",
+    "library(htmltools); library(plotly); readRDS(params$rds_path)",
+    "```"
+  ), rmd_file)
+  
+  rmarkdown::render(
+    rmd_file,
+    output_file = filename,
+    output_dir = dir_html,
+    params = list(rds_path = temp_rds),
+    quiet = TRUE
+  )
+  
+  unlink(rmd_file)
+  unlink(temp_rds)
 }
 
-# Exportar el HTML de las series unificadas
-cat("\nGenerando dashboard de series temporales unificado...\n")
-ts_limpia_html <- generar_serie_temporal_tabs(merged, merged_raw, "limpia")
-ts_cruda_html <- generar_serie_temporal_tabs(merged, merged_raw, "cruda")
 
-htmlwidgets::saveWidget(ts_limpia_html, file.path(dir_html, "Series_Temporales_Limpias_Todas.html"), selfcontained = TRUE)
-htmlwidgets::saveWidget(ts_cruda_html, file.path(dir_html, "Series_Temporales_Crudas_Todas.html"), selfcontained = TRUE)
+cat("Generando dashboards de series temporales hermosos...\n")
+exportar_serie_temporal_ui(merged, merged_raw, "limpia", "Series_Temporales_Limpias_Todas.html")
+exportar_serie_temporal_ui(merged, merged_raw, "cruda", "Series_Temporales_Crudas_Todas.html")
+
+cat("\nEjecución finalizada con éxito.\n")
