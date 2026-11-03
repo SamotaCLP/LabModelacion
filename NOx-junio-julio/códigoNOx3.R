@@ -70,25 +70,52 @@ if(contenida_1 & contenida_2) {
 
 
 #medidas de resumen crudas ----
+# Función de resumen estadístico ampliada (42iQ: NO, NO2, NOx)
 generar_resumen_estadistico <- function(df, nombre_base) {
   gases <- c("Concentracion_NO", "Concentracion_NO2", "Concentracion_NOx")
   
   resumen <- data.frame(
-    Gas = c("NO", "NO2", "NOx"),
-    Minimo = sapply(df[gases], min, na.rm = TRUE),
-    Maximo = sapply(df[gases], max, na.rm = TRUE),
-    Promedio = sapply(df[gases], mean, na.rm = TRUE),
-    Mediana = sapply(df[gases], median, na.rm = TRUE),
+    Gas           = c("NO", "NO2", "NOx"),
+    Minimo        = sapply(df[gases], min, na.rm = TRUE),
+    Q1            = sapply(df[gases], quantile, probs = 0.25, na.rm = TRUE),
+    Mediana       = sapply(df[gases], median, na.rm = TRUE),
+    Promedio      = sapply(df[gases], mean, na.rm = TRUE),
+    Q3            = sapply(df[gases], quantile, probs = 0.75, na.rm = TRUE),
+    Maximo        = sapply(df[gases], max, na.rm = TRUE),
+    IQR           = sapply(df[gases], IQR, na.rm = TRUE),
     Desv_Estandar = sapply(df[gases], sd, na.rm = TRUE)
   )
   rownames(resumen) <- NULL
   
-  cat("\n========================================================\n")
+  cat("\n========================================================================================\n")
   cat("ESTADÍSTICAS:", nombre_base, "\n")
-  cat("========================================================\n")
-  # Imprimir con 4 decimales para mantener la precisión
+  cat("========================================================================================\n")
   print(format(resumen, digits = 4, nsmall = 4))
-  cat("========================================================\n")
+  cat("========================================================================================\n")
+}
+
+# Función de resumen estadístico ampliada (42i: NO, NOx)
+generar_resumen_estadistico_42i <- function(df, nombre_base) {
+  gases <- c("Concentracion_NO", "Concentracion_NOx")
+  
+  resumen <- data.frame(
+    Gas           = c("NO", "NOx"),
+    Minimo        = sapply(df[gases], min, na.rm = TRUE),
+    Q1            = sapply(df[gases], quantile, probs = 0.25, na.rm = TRUE),
+    Mediana       = sapply(df[gases], median, na.rm = TRUE),
+    Promedio      = sapply(df[gases], mean, na.rm = TRUE),
+    Q3            = sapply(df[gases], quantile, probs = 0.75, na.rm = TRUE),
+    Maximo        = sapply(df[gases], max, na.rm = TRUE),
+    IQR           = sapply(df[gases], IQR, na.rm = TRUE),
+    Desv_Estandar = sapply(df[gases], sd, na.rm = TRUE)
+  )
+  rownames(resumen) <- NULL
+  
+  cat("\n========================================================================================\n")
+  cat("ESTADÍSTICAS:", nombre_base, "\n")
+  cat("========================================================================================\n")
+  print(format(resumen, digits = 4, nsmall = 4))
+  cat("========================================================================================\n")
 }
 
 # 2. Ejecutar la función para la base cruda sin sonda
@@ -230,8 +257,33 @@ cat("==============================================\n")
 
 base_final_sinsonda <- datos_filtro2_sinsonda
 
-#medidas de resumen filtradas ----
-generar_resumen_estadistico(base_final_sinsonda, "42iQ SIN SONDA (Datos Validados Finales)")
+#media movil (60 mins) ----
+library(zoo)
+
+base_final_sinsonda$Concentracion_NO  <- rollapply(base_final_sinsonda$Concentracion_NO, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+base_final_sinsonda$Concentracion_NO2 <- rollapply(base_final_sinsonda$Concentracion_NO2, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+base_final_sinsonda$Concentracion_NOx <- rollapply(base_final_sinsonda$Concentracion_NOx, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+#normalizacion ----
+normalizar_min_max <- function(x) {
+  min_x <- min(x, na.rm = TRUE)
+  max_x <- max(x, na.rm = TRUE)
+  x_norm <- (x - min_x) / (max_x - min_x)
+  return(x_norm)
+}
+
+base_final_sinsonda_norm <- base_final_sinsonda
+base_final_sinsonda_norm$Concentracion_NO  <- normalizar_min_max(base_final_sinsonda$Concentracion_NO)
+base_final_sinsonda_norm$Concentracion_NO2 <- normalizar_min_max(base_final_sinsonda$Concentracion_NO2)
+base_final_sinsonda_norm$Concentracion_NOx <- normalizar_min_max(base_final_sinsonda$Concentracion_NOx)
+
+cat("\n==============================================\n")
+cat("42iQ SIN SONDA - REPORTE NORMALIZACIÓN\n")
+cat("==============================================\n")
+cat("Normalización Min-Max [0, 1] aplicada exitosamente.\n(Se conserva el 100% de la data válida post-filtros).\n")
+cat("==============================================\n")
+
+#medidas de resumen finales ----
+generar_resumen_estadistico(base_final_sinsonda_norm, "42iQ SIN SONDA (Normalizado Min-Max)")
 
 ############################################################################
 
@@ -418,9 +470,25 @@ cat(sprintf("- NO  : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Conc
 cat(sprintf("- NO2 : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NO2$fallas, (reporte_f2_sonda$Concentracion_NO2$fallas/valido_NO2_sonda)*100))
 cat(sprintf("- NOx : %d registros eliminados (%.4f%%).\n", reporte_f2_sonda$Concentracion_NOx$fallas, (reporte_f2_sonda$Concentracion_NOx$fallas/valido_NOx_sonda)*100))
 cat("==============================================\n")
-#medidas de resuemn filtradas ----
-base_final_sonda    <- datos_filtro1_sonda
-generar_resumen_estadistico(base_final_sonda, "42iQ CON SONDA (Datos Validados Finales)")
+#media movil (60 mins) ----
+base_final_sonda$Concentracion_NO  <- rollapply(base_final_sonda$Concentracion_NO, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+base_final_sonda$Concentracion_NO2 <- rollapply(base_final_sonda$Concentracion_NO2, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+base_final_sonda$Concentracion_NOx <- rollapply(base_final_sonda$Concentracion_NOx, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+#normalizacon ----
+base_final_sonda_norm <- base_final_sonda
+base_final_sonda_norm$Concentracion_NO  <- normalizar_min_max(base_final_sonda$Concentracion_NO)
+base_final_sonda_norm$Concentracion_NO2 <- normalizar_min_max(base_final_sonda$Concentracion_NO2)
+base_final_sonda_norm$Concentracion_NOx <- normalizar_min_max(base_final_sonda$Concentracion_NOx)
+
+cat("\n==============================================\n")
+cat("42iQ CON SONDA - REPORTE NORMALIZACIÓN\n")
+cat("==============================================\n")
+cat("Normalización Min-Max [0, 1] aplicada exitosamente.\n(Se conserva el 100% de la data válida post-filtros).\n")
+cat("==============================================\n")
+
+#medidas de resumen finales ----
+generar_resumen_estadistico(base_final_sonda_norm, "42iQ CON SONDA (Normalizado Min-Max)")
+
 ############################################################################
 
 base_final_sinsonda <- datos_filtro2_sinsonda
@@ -463,8 +531,11 @@ cat("==============================================\n")
 
 
 
+
 # 42i sin sonda -------------------------####################################
-#lectura de las 3 bases ----
+
+library(zoo)
+#lectura bases ----
 archivos_dat_sinsonda <- c("NOx_42i_07oct_PO_Sinsonda.dat", 
                            "NOx_42i_Portillo_14_Agosto_2025_Sinsonda.dat",
                            "NOx_42i_Portillo_28_agosto_2025_Sinsonda.dat")
@@ -472,14 +543,14 @@ archivos_dat_sinsonda <- c("NOx_42i_07oct_PO_Sinsonda.dat",
 lista_datos_sinsonda <- lapply(archivos_dat_sinsonda, function(archivo) {
   df <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
   df$Fecha_y_Hora <- as.POSIXct(paste(df$Date, df$Time), format = "%m-%d-%y %H:%M")
-  df_limpio <- df[, c("Fecha_y_Hora", "no", "nox")]
-  colnames(df_limpio) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
+  
+  # Rescatamos la columna Flags indispensable para el primer filtro
+  df_limpio <- df[, c("Fecha_y_Hora", "Flags", "no", "nox")]
+  colnames(df_limpio) <- c("Fecha_y_Hora", "Flags", "Concentracion_NO", "Concentracion_NOx")
   return(df_limpio)
 })
 
 i_sinsonda_datos_totales <- do.call(rbind, lista_datos_sinsonda)
-
-# 2. Ordenar y eliminar duplicados exactos de tiempo
 i_sinsonda_datos_totales <- i_sinsonda_datos_totales[order(i_sinsonda_datos_totales$Fecha_y_Hora), ]
 i_sinsonda_datos_totales <- i_sinsonda_datos_totales[!duplicated(i_sinsonda_datos_totales$Fecha_y_Hora), ]
 
@@ -506,9 +577,26 @@ generar_resumen_estadistico_42i <- function(df, nombre_base) {
   cat("========================================================\n")
 }
 
-# 2. Ejecutar la función para la base cruda
 generar_resumen_estadistico_42i(i_sinsonda_datos_totales, "42i SIN SONDA (Datos Crudos)")
-#analisis valores constantes ----
+
+
+#filtro flags H ----
+# Identificamos las filas donde Flags sea distinto a "------" eliminando espacios fantasma
+idx_flags_malas <- trimws(i_sinsonda_datos_totales$Flags) == "-------H"
+eliminados_flags <- sum(idx_flags_malas, na.rm = TRUE)
+
+# Aplicar NA a las posiciones corruptas
+i_sinsonda_datos_totales$Concentracion_NO[idx_flags_malas] <- NA
+i_sinsonda_datos_totales$Concentracion_NOx[idx_flags_malas] <- NA
+
+cat("\n==============================================\n")
+cat("42i SIN SONDA - REPORTE FILTRO FLAGS\n")
+cat("==============================================\n")
+cat(sprintf("Datos eliminados por Flag de error (!= '------'): %d\n", eliminados_flags))
+cat("==============================================\n")
+
+
+#filtro de valores constantes ----
 datos_filtro1_42i_sin <- i_sinsonda_datos_totales
 
 filtrar_rachas <- function(vector_gases, limite = 4) {
@@ -525,82 +613,216 @@ filtrar_rachas <- function(vector_gases, limite = 4) {
 datos_filtro1_42i_sin$Concentracion_NO  <- filtrar_rachas(datos_filtro1_42i_sin$Concentracion_NO, limite = 4)
 datos_filtro1_42i_sin$Concentracion_NOx <- filtrar_rachas(datos_filtro1_42i_sin$Concentracion_NOx, limite = 4)
 
-# Contabilizar válidos y eliminar filas vacías
 valido_NO_42i_sin  <- sum(!is.na(datos_filtro1_42i_sin$Concentracion_NO))
 valido_NOx_42i_sin <- sum(!is.na(datos_filtro1_42i_sin$Concentracion_NOx))
-
-filas_vacias_42i <- is.na(datos_filtro1_42i_sin$Concentracion_NO) & is.na(datos_filtro1_42i_sin$Concentracion_NOx)
-datos_filtro1_42i_sin <- datos_filtro1_42i_sin[!filas_vacias_42i, ]
 
 cat("\n==============================================\n")
 cat("42i SIN SONDA - REPORTE FILTRO 1 (CALIBRACIONES)\n")
 cat("==============================================\n")
-cat(sprintf("Total de datos crudos: %d\n", total_crudos_42i_sin))
 cat(sprintf("- NO eliminados : %d (Quedan %d válidos)\n", total_crudos_42i_sin - valido_NO_42i_sin, valido_NO_42i_sin))
 cat(sprintf("- NOx eliminados: %d (Quedan %d válidos)\n", total_crudos_42i_sin - valido_NOx_42i_sin, valido_NOx_42i_sin))
 cat("==============================================\n")
-#medidas de resumen filtradas ----
-generar_resumen_estadistico_42i(datos_filtro1_42i_sin, "42i SIN SONDA (Filtro de Valores Constantes)")
-###############################################################################
 
+
+#método de tukey (outliers) ----
+
+filtrar_outliers_iqr <- function(x) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  
+  # Límite superior para valores atípicos extremos (3 * IQR)
+  limite_sup <- q3 + 3 * iqr
+  
+  idx_outliers <- which(x > limite_sup)
+  x[idx_outliers] <- NA
+  
+  return(list(serie = x, limite = limite_sup, eliminados = length(idx_outliers)))
+}
+
+# Aplicar el filtro sobre la base post-valores constantes
+resultado_outliers_sin_NO  <- filtrar_outliers_iqr(datos_filtro1_42i_sin$Concentracion_NO)
+resultado_outliers_sin_NOx <- filtrar_outliers_iqr(datos_filtro1_42i_sin$Concentracion_NOx)
+
+# Sobrescribir en el dataframe antes de pasar a la media móvil
+datos_filtro1_42i_sin$Concentracion_NO  <- resultado_outliers_sin_NO$serie
+datos_filtro1_42i_sin$Concentracion_NOx <- resultado_outliers_sin_NOx$serie
+
+cat("\n==============================================\n")
+cat("42i SIN SONDA - REPORTE FILTRO OUTLIERS (IQR)\n")
+cat("==============================================\n")
+cat(sprintf("Límite superior calculado para NO : %.4f ppb\n", resultado_outliers_sin_NO$limite))
+cat(sprintf("Outliers extremos de NO eliminados: %d registros\n", resultado_outliers_sin_NO$eliminados))
+cat("----------------------------------------------\n")
+cat(sprintf("Límite superior calculado para NOx: %.4f ppb\n", resultado_outliers_sin_NOx$limite))
+cat(sprintf("Outliers extremos de NOx eliminados: %d registros\n", resultado_outliers_sin_NOx$eliminados))
+cat("==============================================\n")
+
+#media movil (60 mins) ----
+
+datos_filtro2_42i_sin <- datos_filtro1_42i_sin
+
+datos_filtro2_42i_sin$Concentracion_NO <- rollapply(datos_filtro2_42i_sin$Concentracion_NO, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+datos_filtro2_42i_sin$Concentracion_NOx <- rollapply(datos_filtro2_42i_sin$Concentracion_NOx, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+
+#normalización (75%) ----
+normalizar_y_fijar_cero <- function(x) {
+  # A. Normalización Min-Max (escala 0 a 1)
+  min_x <- min(x, na.rm = TRUE)
+  max_x <- max(x, na.rm = TRUE)
+  x_norm <- (x - min_x) / (max_x - min_x)
+  
+  p25 <- quantile(x_norm, 0.25, na.rm = TRUE)
+  x_ajustado <- x_norm - p25
+  
+  idx_invalidos <- which(x_ajustado < 0)
+  x_ajustado[idx_invalidos] <- NA
+  
+  return(list(serie_final = x_ajustado, descartados = length(idx_invalidos)))
+}
+
+resultado_NO  <- normalizar_y_fijar_cero(datos_filtro2_42i_sin$Concentracion_NO)
+resultado_NOx <- normalizar_y_fijar_cero(datos_filtro2_42i_sin$Concentracion_NOx)
+
+datos_filtro_final_42i_sin <- datos_filtro2_42i_sin
+datos_filtro_final_42i_sin$Concentracion_NO  <- resultado_NO$serie_final
+datos_filtro_final_42i_sin$Concentracion_NOx <- resultado_NOx$serie_final
+
+cat("\n==============================================\n")
+cat("42i SIN SONDA - REPORTE NORMALIZACIÓN Y AJUSTE '0'\n")
+cat("==============================================\n")
+cat(sprintf("Datos NO descartados por quedar bajo el nuevo 0 : %d\n", resultado_NO$descartados))
+cat(sprintf("Datos NOx descartados por quedar bajo el nuevo 0: %d\n", resultado_NOx$descartados))
+cat("==============================================\n")
+
+
+#medidas de resumen final ----
+generar_resumen_estadistico_42i(datos_filtro_final_42i_sin, "42i SIN SONDA (MM 60min + Norm + Ajuste 75%)")
+
+##############################################################################
 
 # 42i con sonda -------------------------####################################
 
-#lectura de los 3 archivos ----
-
+library(zoo)
+#lectura bases ----
 archivos_dat_sonda <- c("42i 053025 1425_Sonda.dat", 
                         "NOx_42i_Portillo_junio_2025_Sonda.dat", 
                         "NOx_42i_julio_Portillo_Sonda.dat")
 
-# 2. Leer y combinar los 3 archivos en un solo dataframe automáticamente
-lista_datos <- lapply(archivos_dat_sonda, function(archivo) {
-  read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+lista_datos_sonda <- lapply(archivos_dat_sonda, function(archivo) {
+  df <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+  df$Fecha_y_Hora <- as.POSIXct(paste(df$Date, df$Time), format = "%m-%d-%y %H:%M")
+  
+  # Rescatamos la columna Flags indispensable para el filtro
+  df_limpio <- df[, c("Fecha_y_Hora", "Flags", "no", "nox")]
+  colnames(df_limpio) <- c("Fecha_y_Hora", "Flags", "Concentracion_NO", "Concentracion_NOx")
+  return(df_limpio)
 })
-i_sonda_datos_crudos <- do.call(rbind, lista_datos)
 
-# 3. Limpiar y formatear fechas
-i_sonda_datos_interes <- i_sonda_datos_crudos[, c("Time", "Date", "no", "nox")]
-i_sonda_datos_interes$Fecha_y_Hora <- as.POSIXct(
-  paste(i_sonda_datos_interes$Date, i_sonda_datos_interes$Time), 
-  format = "%m-%d-%y %H:%M"
-)
+i_sonda_datos_totales <- do.call(rbind, lista_datos_sonda)
+i_sonda_datos_totales <- i_sonda_datos_totales[order(i_sonda_datos_totales$Fecha_y_Hora), ]
+i_sonda_datos_totales <- i_sonda_datos_totales[!duplicated(i_sonda_datos_totales$Fecha_y_Hora), ]
 
-# 4. Crear base final con columnas renombradas
-i_sonda_datos_final <- i_sonda_datos_interes[, c("Fecha_y_Hora", "no", "nox")]
-colnames(i_sonda_datos_final) <- c("Fecha_y_Hora", "Concentracion_NO", "Concentracion_NOx")
-
-# Ordenar cronológicamente por si los archivos se cargaron desordenados
-i_sonda_datos_final <- i_sonda_datos_final[order(i_sonda_datos_final$Fecha_y_Hora), ]
+total_crudos_42i_sonda <- nrow(i_sonda_datos_totales)
 
 
+#resumen de medidas crudas ----
+generar_resumen_estadistico_42i(i_sonda_datos_totales, "42i CON SONDA (Datos Crudos)")
 
-#medidas de resumen crudas ----
-generar_resumen_estadistico_42i(i_sonda_datos_final, "42i CON SONDA (Datos Crudos)")
-#analisis de valores constantes ----
-datos_filtro1_42i_sonda <- i_sonda_datos_final
 
-filtrar_rachas <- function(vector_gases, limite = 4) {
-  vector_seguro <- vector_gases
-  vector_seguro[is.na(vector_seguro)] <- -999999
-  rachas <- rle(vector_seguro)
-  es_pegado <- rachas$lengths >= limite
-  es_pegado[rachas$values == -999999] <- FALSE
-  indices_pegados <- rep(es_pegado, rachas$lengths)
-  vector_gases[indices_pegados] <- NA
-  return(vector_gases)
-}
+#filtro flags H ----
+# Identificamos las filas donde Flags sea distinto a "------"
+idx_flags_malas_sonda <- trimws(i_sonda_datos_totales$Flags) == "------H"
+eliminados_flags_sonda <- sum(idx_flags_malas_sonda, na.rm = TRUE)
+
+# Aplicar NA a las posiciones corruptas
+i_sonda_datos_totales$Concentracion_NO[idx_flags_malas_sonda] <- NA
+i_sonda_datos_totales$Concentracion_NOx[idx_flags_malas_sonda] <- NA
+
+cat("\n==============================================\n")
+cat("42i CON SONDA - REPORTE FILTRO FLAGS\n")
+cat("==============================================\n")
+cat(sprintf("Datos eliminados por Flag de error (!= '------'): %d\n", eliminados_flags_sonda))
+cat("==============================================\n")
+
+
+#filtro de valores constantes ----
+datos_filtro1_42i_sonda <- i_sonda_datos_totales
 
 datos_filtro1_42i_sonda$Concentracion_NO  <- filtrar_rachas(datos_filtro1_42i_sonda$Concentracion_NO, limite = 4)
 datos_filtro1_42i_sonda$Concentracion_NOx <- filtrar_rachas(datos_filtro1_42i_sonda$Concentracion_NOx, limite = 4)
 
-# Eliminar filas completamente vacías
-filas_vacias_sonda <- is.na(datos_filtro1_42i_sonda$Concentracion_NO) & is.na(datos_filtro1_42i_sonda$Concentracion_NOx)
-datos_filtro1_42i_sonda <- datos_filtro1_42i_sonda[!filas_vacias_sonda, ]
-#medidas de resumen filtradas ----
-generar_resumen_estadistico_42i(datos_filtro1_42i_sonda, "42i CON SONDA (Filtro de Valores Constantes)")
+valido_NO_42i_sonda  <- sum(!is.na(datos_filtro1_42i_sonda$Concentracion_NO))
+valido_NOx_42i_sonda <- sum(!is.na(datos_filtro1_42i_sonda$Concentracion_NOx))
+
+cat("\n==============================================\n")
+cat("42i CON SONDA - REPORTE FILTRO 1 (CALIBRACIONES)\n")
+cat("==============================================\n")
+cat(sprintf("- NO eliminados : %d (Quedan %d válidos)\n", total_crudos_42i_sonda - valido_NO_42i_sonda, valido_NO_42i_sonda))
+cat(sprintf("- NOx eliminados: %d (Quedan %d válidos)\n", total_crudos_42i_sonda - valido_NOx_42i_sonda, valido_NOx_42i_sonda))
+cat("==============================================\n")
+
+
+#metodo IQR de Tukey (outliers) ----
+
+filtrar_outliers_iqr <- function(x) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+
+  limite_sup <- q3 + 3 * iqr
+  
+  idx_outliers <- which(x > limite_sup)
+  x[idx_outliers] <- NA
+  
+  return(list(serie = x, limite = limite_sup, eliminados = length(idx_outliers)))
+}
+
+
+resultado_outliers_NO  <- filtrar_outliers_iqr(datos_filtro1_42i_sonda$Concentracion_NO)
+resultado_outliers_NOx <- filtrar_outliers_iqr(datos_filtro1_42i_sonda$Concentracion_NOx)
+
+
+datos_filtro1_42i_sonda$Concentracion_NO  <- resultado_outliers_NO$serie
+datos_filtro1_42i_sonda$Concentracion_NOx <- resultado_outliers_NOx$serie
+
+cat("\n==============================================\n")
+cat("42i CON SONDA - REPORTE FILTRO OUTLIERS (IQR)\n")
+cat("==============================================\n")
+cat(sprintf("Límite superior calculado para NO : %.2f ppb\n", resultado_outliers_NO$limite))
+cat(sprintf("Picos extremos de NO eliminados   : %d registros\n", resultado_outliers_NO$eliminados))
+cat("----------------------------------------------\n")
+cat(sprintf("Límite superior calculado para NOx: %.2f ppb\n", resultado_outliers_NOx$limite))
+cat(sprintf("Picos extremos de NOx eliminados  : %d registros\n", resultado_outliers_NOx$eliminados))
+cat("==============================================\n")
+#media movil (60 mins) ----
+datos_filtro2_42i_sonda <- datos_filtro1_42i_sonda
+
+datos_filtro2_42i_sonda$Concentracion_NO <- rollapply(datos_filtro2_42i_sonda$Concentracion_NO, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+datos_filtro2_42i_sonda$Concentracion_NOx <- rollapply(datos_filtro2_42i_sonda$Concentracion_NOx, width = 60, FUN = mean, na.rm = TRUE, fill = NA, align = "right")
+
+
+#normalización (75%) ----
+resultado_NO_sonda  <- normalizar_y_fijar_cero(datos_filtro2_42i_sonda$Concentracion_NO)
+resultado_NOx_sonda <- normalizar_y_fijar_cero(datos_filtro2_42i_sonda$Concentracion_NOx)
+
+datos_filtro_final_42i_sonda <- datos_filtro2_42i_sonda
+datos_filtro_final_42i_sonda$Concentracion_NO  <- resultado_NO_sonda$serie_final
+datos_filtro_final_42i_sonda$Concentracion_NOx <- resultado_NOx_sonda$serie_final
+
+cat("\n==============================================\n")
+cat("42i CON SONDA - REPORTE NORMALIZACIÓN Y AJUSTE '0'\n")
+cat("==============================================\n")
+cat(sprintf("Datos NO descartados por quedar bajo el nuevo 0 : %d\n", resultado_NO_sonda$descartados))
+cat(sprintf("Datos NOx descartados por quedar bajo el nuevo 0: %d\n", resultado_NOx_sonda$descartados))
+cat("==============================================\n")
+
+
+#medidas de resumen finales ----
+generar_resumen_estadistico_42i(datos_filtro_final_42i_sonda, "42i CON SONDA (MM 60min + Norm + Ajuste 75%)")
 ###############################################################################
 
-#Graficos  --------------#####################################
+#Graficos  --------------######################################################
 #series de tiempo (todos juntos en ploty)----
 library(plotly)
 
@@ -649,57 +871,257 @@ grafico_combinado
 
 
 
-#graficos separados (plot) ----
 
 #grafica 42iQ sin sonda NO ----
+plot(x = iQ_sinsonda_datos_totales$Fecha_y_Hora, 
+     y = iQ_sinsonda_datos_totales$Concentracion_NO, 
+     type = "l", col = "blue", lwd = 1.2,
+     main = "42iQ Sin Sonda (Datos Crudos) - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42iQ sin sonda NO final ----
+plot(x = base_final_sinsonda$Fecha_y_Hora, 
+     y = base_final_sinsonda$Concentracion_NO, 
+     type = "l", col = "blue", lwd = 1.5,
+     main = "42iQ Sin Sonda (Filtro ctes + Corrección Umbral -3.0) - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
 
 #grafica 42iQ sin sonda NOx ----
+plot(x = iQ_sinsonda_datos_totales$Fecha_y_Hora, 
+     y = iQ_sinsonda_datos_totales$Concentracion_NOx, 
+     type = "l", col = "deepskyblue", lwd = 1.2,
+     main = "42iQ Sin Sonda (Datos Crudos) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42iQ sin sonda NOx final ----
+plot(x = base_final_sinsonda$Fecha_y_Hora, 
+     y = base_final_sinsonda$Concentracion_NOx, 
+     type = "l", col = "deepskyblue", lwd = 1.5,
+     main = "42iQ Sin Sonda (Filtro ctes + Corrección Umbral -3.0) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
 
 #grafica 42iQ con sonda NO ----
+plot(x = iQ_sonda_datos_totales$Fecha_y_Hora, 
+     y = iQ_sonda_datos_totales$Concentracion_NO, 
+     type = "l", col = "red", lwd = 1.2,
+     main = "42iQ Con Sonda (Datos Crudos) - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42iQ con sonda NO final ----
+plot(x = base_final_sonda$Fecha_y_Hora, 
+     y = base_final_sonda$Concentracion_NO, 
+     type = "l", col = "red", lwd = 1.5,
+     main = "42iQ Con Sonda (Filtro ctes + Corrección Umbral -3.0) - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
+abline(h = 0, col = "black", lty = 2)
 
 #grafica 42iQ con sonda NOx ----
+plot(x = iQ_sonda_datos_totales$Fecha_y_Hora, 
+     y = iQ_sonda_datos_totales$Concentracion_NOx, 
+     type = "l", col = "darkred", lwd = 1.2,
+     main = "42iQ Con Sonda (Datos Crudos) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
+
+#grafica 42iQ con sonda NOx final ----
+plot(x = base_final_sonda$Fecha_y_Hora, 
+     y = base_final_sonda$Concentracion_NOx, 
+     type = "l", col = "darkred", lwd = 1.5,
+     main = "42iQ Con Sonda (Filtro ctes + Corrección Umbral -3.0) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
+abline(h = 0, col = "black", lty = 2)
 
 
 #grafica 42i sin sonda NO ----
 plot(x = i_sinsonda_datos_totales$Fecha_y_Hora, 
      y = i_sinsonda_datos_totales$Concentracion_NO, 
      type = "l", col = "darkgreen", lwd = 1.5,
-     main = "42i Sin Sonda - NO", 
+     main = "42i Sin Sonda (filtro de flag H + filtro de datos ctes) - NO", 
      xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
 abline(h = 0, col = "black", lty = 2)
 
-#grafica 42i sin sonda NOx ----
+#grafica 42i sin sonda NO final ----
+plot(x = datos_filtro_final_42i_sin$Fecha_y_Hora, 
+     y = datos_filtro_final_42i_sin$Concentracion_NO, 
+     type = "l", col = "darkgreen", lwd = 1.5,
+     main = "42i Sin Sonda (filtro de flag H+filtro de datos ctes+tukey+media movil+normalización) - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración Relativa de NO")
+#grafica 42i sin sonda NOx  ----
 plot(x = i_sinsonda_datos_totales$Fecha_y_Hora, 
      y = i_sinsonda_datos_totales$Concentracion_NOx, 
      type = "l", col = "darkorange", lwd = 1.5,
-     main = "42i Sin Sonda - NOx", 
+     main = "42i Sin Sonda (filtro de flag H + filtro de datos ctes) - NOx", 
      xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
 abline(h = 0, col = "black", lty = 2)
 
+#grafica 42i sin sonda NOx final ----
+
+plot(x = datos_filtro_final_42i_sin$Fecha_y_Hora, 
+     y = datos_filtro_final_42i_sin$Concentracion_NOx, 
+     type = "l", col = "darkorange", lwd = 1.5,
+     main = "42i Sin Sonda (filtro de flag H+filtro de datos ctes+tukey+media movil+normalización) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración Relativa de NOx")
+
+
 #grafica 42i con sonda NO ----
 
-plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
-     y = i_sonda_datos_periodo$Concentracion_NO, 
+plot(x = datos_filtro1_42i_sonda$Fecha_y_Hora, 
+     y = datos_filtro1_42i_sonda$Concentracion_NO, 
      type = "l", col = "purple", lwd = 1.5,
-     main = "42i Con Sonda - NO", 
+     main = "42i Con Sonda (filtro de flag H + ctes) - NO", 
      xlab = "Fecha y Hora", ylab = "Concentración NO [ppb]")
 abline(h = 0, col = "black", lty = 2)
 
 
+#grafica 42i con sonda NOx final (filtro de flag H+filtro de datos ctes+media movil+normalización)
+#grafica 42i con sonda NO final ----
+plot(x = datos_filtro_final_42i_sonda$Fecha_y_Hora, 
+     y = datos_filtro_final_42i_sonda$Concentracion_NO, 
+     type = "l", col = "purple", lwd = 1.5,
+     main = "42i Con Sonda(filtro de flag H+filtro de datos ctes+tukey+media movil+normalización)  - NO", 
+     xlab = "Fecha y Hora", ylab = "Concentración Relativa de NO")
 #grafica 42i con sonda NOx ----
-
-plot(x = i_sonda_datos_periodo$Fecha_y_Hora, 
-     y = i_sonda_datos_periodo$Concentracion_NOx, 
-     type = "l", col = "brown", lwd = 1.5,
-     main = "42i Con Sonda - NOx", 
+plot(x = datos_filtro1_42i_sonda$Fecha_y_Hora, 
+     y = datos_filtro1_42i_sonda$Concentracion_NOx, 
+     type = "l", col = "brown", lwd = 1.2,
+     main = "42i con Sonda (filtro de flag H + filtro de datos ctes) - NOx", 
      xlab = "Fecha y Hora", ylab = "Concentración NOx [ppb]")
 abline(h = 0, col = "black", lty = 2)
+#grafica 42i con sonda NOx final ----
+plot(x = datos_filtro_final_42i_sonda$Fecha_y_Hora, 
+     y = datos_filtro_final_42i_sonda$Concentracion_NOx, 
+     type = "l", col = "brown", lwd = 1.5,
+     main = "42i con Sonda (filtro de flag H+filtro de datos ctes+tukey+media movil+normalización) - NOx", 
+     xlab = "Fecha y Hora", ylab = "Concentración Relativa de NOx")
 
 
 
-#
-#
-#
-#
-#
+
+#Comparaciones efecto sonda
+
+
+# periodo 1: Mayo a finales de Julio (42i con sonda vs 42iQ sin sonda) ----
+
+
+#efecto sonda - NO
+comp_sonda_periodo1_NO <- plot_ly() %>%
+  add_lines(data = datos_filtro_final_42i_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42i Con Sonda', line = list(color = 'purple', width = 1.2)) %>%
+  add_lines(data = base_final_sinsonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42iQ Sin Sonda', line = list(color = 'blue', width = 1.2)) %>%
+  layout(title = "Efecto Sonda (Mayo-Julio): NO Relativo",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración NO [0 - 1]"))
+
+comp_sonda_periodo1_NO
+
+
+#Efecto Sonda - NOx
+comp_sonda_periodo1_NOx <- plot_ly() %>%
+  add_lines(data = datos_filtro_final_42i_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42i Con Sonda', line = list(color = 'brown', width = 1.2)) %>%
+  add_lines(data = base_final_sinsonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42iQ Sin Sonda', line = list(color = 'deepskyblue', width = 1.2)) %>%
+  layout(title = "Efecto Sonda (Mayo-Julio): NOx Relativo",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración NOx [0 - 1]"))
+
+comp_sonda_periodo1_NOx
+
+
+# PERIODO 2: Finales de Julio a Octubre (42iQ con sonda vs 42i sin sonda) ----
+
+#Efecto Sonda - NO
+comp_sonda_periodo2_NO <- plot_ly() %>%
+  add_lines(data = base_final_sonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42iQ Con Sonda', line = list(color = 'red', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sin, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42i Sin Sonda', line = list(color = 'darkgreen', width = 1.2)) %>%
+  layout(title = "Efecto Sonda (Julio-Octubre): NO Relativo",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración NO [0 - 1]"))
+
+comp_sonda_periodo2_NO
+
+
+#Efecto Sonda - NOx
+comp_sonda_periodo2_NOx <- plot_ly() %>%
+  add_lines(data = base_final_sonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42iQ Con Sonda', line = list(color = 'darkred', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sin, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42i Sin Sonda', line = list(color = 'darkorange', width = 1.2)) %>%
+  layout(title = "Efecto Sonda (Julio-Octubre): NOx Relativo",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "Concentración NOx [0 - 1]"))
+
+comp_sonda_periodo2_NOx
+
+
+
+
+#Comparaciones 42iQ vs 42i
+
+library(plotly)
+
+
+#comparaciones 42iQ vs 42i
+
+
+#NO sin Sonda ----
+comp_sinsonda_NO <- plot_ly() %>%
+  add_lines(data = base_final_sinsonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42iQ Sin Sonda', line = list(color = 'blue', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sin, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42i Sin Sonda', line = list(color = 'darkgreen', width = 1.2)) %>%
+  layout(title = "Comparación NO (Sin Sonda): 42iQ vs 42i",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "NO Relativo [0 - 1]"))
+
+comp_sinsonda_NO
+
+
+#NOx Sin Sonda ----
+comp_sinsonda_NOx <- plot_ly() %>%
+  add_lines(data = base_final_sinsonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42iQ Sin Sonda', line = list(color = 'deepskyblue', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sin, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42i Sin Sonda', line = list(color = 'darkorange', width = 1.2)) %>%
+  layout(title = "Comparación NOx (Sin Sonda): 42iQ vs 42i",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "NOx Relativo [0 - 1]"))
+
+comp_sinsonda_NOx
+
+
+#NO Con Sonda ----
+comp_sonda_NO <- plot_ly() %>%
+  add_lines(data = base_final_sonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42iQ Con Sonda', line = list(color = 'red', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NO,
+            name = '42i Con Sonda', line = list(color = 'purple', width = 1.2)) %>%
+  layout(title = "Comparación NO (Con Sonda): 42iQ vs 42i",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "NO Relativo [0 - 1]"))
+
+comp_sonda_NO
+
+
+#NOx Con Sonda ----
+comp_sonda_NOx <- plot_ly() %>%
+  add_lines(data = base_final_sonda_norm, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42iQ Con Sonda', line = list(color = 'darkred', width = 1.2)) %>%
+  add_lines(data = datos_filtro_final_42i_sonda, x = ~Fecha_y_Hora, y = ~Concentracion_NOx,
+            name = '42i Con Sonda', line = list(color = 'green', width = 1.2)) %>%
+  layout(title = "Comparación NOx (Con Sonda): 42iQ vs 42i",
+         xaxis = list(title = "Fecha y Hora", rangeslider = list(type = "date")),
+         yaxis = list(title = "NOx Relativo [0 - 1]"))
+
+comp_sonda_NOx
+
 #
