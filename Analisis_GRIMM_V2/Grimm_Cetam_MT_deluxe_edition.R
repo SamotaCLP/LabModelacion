@@ -268,7 +268,7 @@ widget_boxplots_interactivos <- function(fr) {
       sel_rule.addEventListener('change', updateBoxplots);
       updateBoxplots();
     }",
-    jsonlite::toJSON(c_vals), jsonlite::toJSON(m_vals),
+    jsonlite::toJSON(round(c_vals, 2)), jsonlite::toJSON(round(m_vals, 2)),
     mc_c, mc_m,
     slider_qinf_id, slider_qsup_id, val_qinf_id, val_qsup_id, select_rule_id, info_box_id
   )
@@ -690,6 +690,28 @@ unlink(rmd_file); unlink(temp_rds)
 cat("Dashboard Maestro generado con éxito.\n")
 
 
+
+# -----------------------------------------------------------
+# Verifica que el HTML sea realmente autocontenido y reporta su tamaño
+verificar_html_autocontenido <- function(ruta) {
+  stopifnot(file.exists(ruta))
+  txt <- paste(readLines(ruta, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  
+  # Referencias a archivos locales (rutas de Windows / carpeta _files) o recursos remotos
+  patron_local  <- "(src|href)=\"(file:|[A-Za-z]:[/\\\\]|[^\"]*_files/)[^\"]*\""
+  patron_remoto <- "(src|href)=\"https?://[^\"]*\\.(js|css)[^\"]*\""
+  loc <- regmatches(txt, gregexpr(patron_local,  txt, perl = TRUE))[[1]]
+  rem <- regmatches(txt, gregexpr(patron_remoto, txt, perl = TRUE))[[1]]
+  
+  mb <- file.size(ruta) / 1024^2
+  cat(sprintf("• %s: %.1f MB | refs locales: %d | refs remotas: %d\n",
+              basename(ruta), mb, length(loc), length(rem)))
+  if (length(loc)) warning("Este HTML apunta a archivos locales; en otro PC se verá vacío: ",
+                           paste(utils::head(loc, 3), collapse = " | "))
+  if (mb > 50) warning(sprintf("%s pesa %.0f MB; los visores web suelen fallar sobre ~50 MB.", basename(ruta), mb))
+  invisible(list(local = loc, remoto = rem, mb = mb))
+}
+
 # =============================================================================
 # DASHBOARDS DE SERIES TEMPORALES (Envueltos en diseño UI)
 # =============================================================================
@@ -890,4 +912,12 @@ cat("Generando dashboards de series temporales hermosos...\n")
 exportar_serie_temporal_ui(merged, merged_raw, "limpia", "Series_Temporales_Limpias_Todas.html")
 exportar_serie_temporal_ui(merged, merged_raw, "cruda", "Series_Temporales_Crudas_Todas.html")
 
+cat("\nVerificando HTMLs generados...\n")
+for (f in c("Dashboard_Maestro_Concordancia.html",
+            "Series_Temporales_Limpias_Todas.html",
+            "Series_Temporales_Crudas_Todas.html")) {
+  verificar_html_autocontenido(file.path(dir_html, f))
+}
+
 cat("\nEjecución finalizada con éxito.\n")
+
