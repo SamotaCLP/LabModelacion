@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOx en Portillo · Comparación de analizadores</title>
+<!-- PLOTLY -->
+<style>
+:root{--ink:#153431;--muted:#49615d;--line:#c8d4cf;--paper:#f5f6f1;--teal:#006b68;--orange:#ad471e;--blue:#214660}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Source Sans 3","Segoe UI",sans-serif}
+header{background:#173e3a;color:white;border-bottom:5px solid #7caf99}
+.wrap{max-width:1300px;margin:auto;padding:0 clamp(16px,4vw,62px)}
+.mast{padding-block:21px 28px}.brand{display:flex;justify-content:space-between;gap:16px;color:#c6e0d7;font-size:.85rem;letter-spacing:.04em}
+h1{font:500 clamp(36px,4.3vw,66px)/1.05 Georgia,serif;margin:26px 0 8px}header p{margin:0;color:#deebe5}
+nav{border-bottom:1px solid var(--line);background:white}.tabs{display:flex;gap:12px;overflow:auto}
+button{font:inherit;color:var(--ink);cursor:pointer}.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:17px 15px 13px;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--teal);font-weight:700;border-color:var(--teal)}
+:focus-visible{outline:3px solid #137e95;outline-offset:-3px}
+main{padding-block:26px 50px!important}.intro{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h2,h3,p{margin:0}h2{font:500 clamp(27px,3vw,39px)/1.15 Georgia,serif}.intro p,.note,small{color:var(--muted)}.note{font-size:.93rem;margin:6px 0 10px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);margin:19px 0 24px;border-block:1px solid var(--line);padding:16px 0;gap:14px}
+.metric{border-left:1px solid var(--line);padding-left:17px}.metric:first-child{border:0;padding:0}.metric small{display:block}.metric strong{font:500 1.85rem Georgia,serif;font-variant-numeric:tabular-nums}
+article,details{background:white;border:1px solid var(--line);border-radius:10px;padding:clamp(14px,2.1vw,27px);min-width:0}
+article h3,details h3{font-size:1.16rem;font-weight:650}.headrow{display:flex;justify-content:space-between;align-items:start;gap:12px;flex-wrap:wrap}
+.action{border:1px solid var(--line);border-radius:6px;background:white;padding:6px 12px;font-size:.85rem}.action:hover{background:#eaf2ee}
+.plot{width:100%;height:385px}.wide{height:425px}.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr);gap:18px;margin:18px 0}
+.stats{margin:18px 0}.stats div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding:10px 0}.stats dt{color:var(--muted)}.stats dd{margin:0;font-weight:650}
+details{margin-top:16px}summary{cursor:pointer;font-weight:650}details[open] summary{margin-bottom:12px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.method{max-width:95ch}.method p+p{margin-top:8px}.pending{padding-block:36px}.pending p{margin-top:12px}
+@media(max-width:760px){.grid,.pair{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.metric:nth-child(3){border:0;padding:0}.wide{height:370px}.plot{min-width:0}.brand{font-size:.78rem}}
+</style>
+</head>
+<body>
+<header><div class="wrap mast"><div class="brand"><span>CETAM · Universidad Técnica Federico Santa María</span><span>Campaña 2025</span></div>
+<h1>NOx en Portillo</h1><p>Comparación horaria de los analizadores Thermo 42i y 42iQ</p></div></header>
+<nav aria-label="Periodos de medición"><div class="wrap tabs" role="tablist" aria-label="Periodos">
+<button id="t1" role="tab" aria-selected="false" aria-controls="p1" tabindex="-1">Periodo 1</button>
+<button id="t11" role="tab" aria-selected="true" aria-controls="p11">Periodo 1-1</button>
+<button id="t12" role="tab" aria-selected="false" aria-controls="p12" tabindex="-1">Periodo 1-2</button>
+<button id="t2" role="tab" aria-selected="false" aria-controls="p2" tabindex="-1">Periodo 2</button>
+<button id="t21" role="tab" aria-selected="false" aria-controls="p21" tabindex="-1">Periodo 2-1</button>
+<button id="t22" role="tab" aria-selected="false" aria-controls="p22" tabindex="-1">Periodo 2-2</button>
+</div></nav>
+<main class="wrap">
+<section id="p1" hidden role="tabpanel" aria-labelledby="t1"><div class="intro"><h2>Periodo 1 · cambio de amplitud del 42i</h2><p>22 de mayo – 24 de julio de 2025</p></div>
+<article><h3>1-1 y 1-2 en la misma escala</h3><p class="note">Medias horarias pareadas antes del ajuste P25. Arrastra para ampliar la noche del 20 al 21 de junio. Se conserva el reloj de las descargas.</p>
+<div class="plot wide" id="serie1"></div><p id="cambio1"></p></article>
+<article><h3>¿Qué se sabe sobre la nieve?</h3>
+<p>El viernes 20 hubo tránsito por el paso tras nevadas anteriores. El siguiente cierre de Guardia Vieja comenzó el sábado 21 a las 18:00 de Chile. El domingo 22 las cámaras de Ski Portillo mostraban nieve acumulada. La DGA informó 74 cm de manto en la ruta de nieve de Portillo al 23 de junio. La altura del manto no fecha una nevada ni mide la exposición de la toma del CETAM.</p>
+<p class="note"><a href="https://www.tiempodesanjuan.com/san-juan/sanjuaninos-y-mendocinos-cruzaron-chile-el-paso-los-libertadores-seis-dias-cerrado-n404930">Tránsito el viernes 20</a> · <a href="https://www.latercera.com/nacional/noticia/paso-los-libertadores-se-mantendra-cerrado-este-domingo-por-nevadas-en-la-cordillera/">Comunicado de cierre del sábado 21</a> · <a href="https://www.mdzol.com/sociedad/2025/6/22/webcams-y-fotos-asi-esta-el-paso-chile-estos-momentos-1879671.html">Imágenes del domingo 22</a> · <a href="https://dga.mop.gob.cl/uploads/sites/13/2025/01/2025-06-23-boletin-hidrometeorologico.pdf">Boletín DGA</a></p>
+<p>La aclaración del CETAM mantiene al 42i con sonda tras la visita del 19 de junio. No consigna obstrucción ni reparación. La descarga del 42i carece de caudal y presión de muestra. La obstrucción por nieve y el predominio del ruido electrónico quedan como hipótesis sin verificar.</p></article></section>
+<section id="p11" role="tabpanel" aria-labelledby="t11">
+<div class="intro"><h2>Calibración entre equipos</h2><p>22 de mayo – 20 de junio de 2025</p></div>
+<div class="metrics">
+<div class="metric"><small>Horas pareadas retenidas</small><strong id="n"></strong></div>
+<div class="metric"><small>Horas para ajustar la recta</small><strong id="na"></strong></div>
+<div class="metric"><small>Horas de prueba posterior</small><strong id="np"></strong></div>
+<div class="metric"><small>R² del ajuste</small><strong id="r2"></strong></div></div>
+<article><div class="headrow"><div><h3>Serie horaria simultánea</h3><p class="note">Arrastra sobre el gráfico o ajusta el selector inferior para ampliar un intervalo.</p></div>
+<button class="action" id="reset">Restablecer vista</button></div><div id="serie" class="plot wide" aria-label="NOx horario de ambos equipos"></div></article>
+<div class="grid"><article><h3>Recta de calibración</h3><p class="note">Una observación por hora. La recta se estima con los puntos de ajuste. La identidad representa lecturas iguales.</p>
+<p id="corr11"></p>
+<div id="scatter" class="plot" aria-label="Dispersión con regresión lineal"></div></article>
+<article><h3>Predicción en horas posteriores</h3><p class="note">Objetivo: estimar la lectura del 42iQ directo a partir del 42i con sonda.</p>
+<dl class="stats"><div><dt>Inicio de la prueba</dt><dd id="corte"></dd></div><div><dt>Error absoluto medio</dt><dd id="mae"></dd></div>
+<div><dt>Raíz del error cuadrático medio</dt><dd id="rmse"></dd></div><div><dt>Error con la mediana histórica</dt><dd id="base"></dd></div>
+<div><dt>Rango de 42i usado para ajustar</dt><dd id="rango"></dd></div></dl>
+<p class="note" id="lectura"></p></article></div>
+<details id="agreement"><summary>Concordancia entre las lecturas tratadas</summary>
+<p class="note">Todas las horas retenidas del 1-1, antes de aplicar la recta. Las tolerancias son ilustrativas.</p>
+<div class="pair"><div><h3>Bland–Altman</h3><div id="ba" class="plot"></div></div><div><h3>Probabilidad empírica de acuerdo</h3><div id="pa" class="plot"></div></div></div></details>
+<details><summary>Datos y criterios de análisis</summary><div class="method">
+<p>El 42i estuvo conectado a la sonda y el 42iQ midió directamente el ambiente. Se conserva el reloj registrado. El corte operativo del 21 de junio separa el cambio de amplitud observado en el 42i.</p>
+<p>En el 42i se requieren minutos sin bandera y en el 42iQ, sin alarma general. Se eliminan rachas de cuatro o más lecturas idénticas en minutos consecutivos del 42iQ y valores menores que −3; los negativos restantes se llevan a cero. Cada promedio usa al menos 45 minutos compartidos dentro de la hora.</p>
+<p id="criterio"></p><p>Se muestran las lecturas en la escala original. La comparación supone unidades compatibles. La predicción se refiere a la configuración de esta campaña y requiere verificación independiente antes de su uso operativo.</p>
+</div></details></section>
+<section id="p12" hidden role="tabpanel" aria-labelledby="t12">
+<div class="intro"><h2>Forma de las curvas y acuerdo</h2><p>21 de junio – 24 de julio de 2025</p></div>
+<p class="note">42i con sonda y 42iQ directo. El montaje se mantiene tras la caída de amplitud del 42i.</p>
+<div id="tramo12"></div>
+<article><h3>Series horarias antes del ajuste P25</h3>
+<p class="note" id="forma12"></p>
+<label>Escala del gráfico <select id="escala12"><option value="real">Lecturas originales del 42i y filtradas del 42iQ</option><option value="forma">Min–max independiente por equipo</option></select></label>
+<label><input type="checkbox" id="excluir12"> Explorar sin los pares fuera de media ± 3 DE del 42i</label>
+<p class="note" id="sens12"></p><div id="curvas12" class="plot wide"></div></article>
+<article><h3>Dispersión de las medias horarias</h3><p class="note" id="resScatter12"></p><div id="scatter12" class="plot"></div></article>
+<div id="ciclo12"></div>
+<article><h3>¿Sube el nivel bajo del 42i?</h3>
+<p class="note" id="tendencia12"></p><div id="bajos12" class="plot"></div>
+<label>Lectura del 42i <select id="nivel12"><option value="i">Original</option><option value="i_min">Mínimos diarios alineados</option><option value="i_p10">Percentiles 10 diarios alineados</option></select></label>
+<div id="nivelSerie" class="plot"></div><p id="resultadoNivel"></p>
+<p class="note">Cada día completo se desplaza en bloque hasta situar su mínimo o su percentil 10 en la mediana de esos niveles durante los días de ajuste. Se conservan las amplitudes intradiarias. Esta exploración usa las cinco horas extremas y requiere conocer el día completo. El cambio puede incluir variación ambiental. Para verificar una deriva instrumental, el fabricante indica medir aire cero. <a href="https://assets.thermofisher.com/TFS-Assets/LSG/manuals/EPM-manual-Model%2042inox.pdf">Manual del 42i, capítulo 4</a>.</p></article>
+<div class="grid"><article><h3>Concordancia entre las lecturas tratadas</h3><p class="note" id="muestra12"></p>
+<dl class="stats" id="metricas12"></dl></article>
+<article><h3>Predicción en horas posteriores</h3><p class="note" id="split12"></p>
+<dl class="stats" id="errores12"></dl><p id="conclusion12"></p></article></div>
+<article><div class="pair"><div><h3>Bland–Altman</h3><div id="ba12" class="plot"></div></div>
+<div><h3>Probabilidad empírica de acuerdo</h3><div id="pa12" class="plot"></div></div></div></article>
+</section>
+<section id="p2" hidden role="tabpanel" aria-labelledby="t2"><div class="intro"><h2>Comparación tras la rotación</h2><p>26 de julio – 7 de octubre de 2025</p></div><p class="note">42i directo y 42iQ con sonda.</p>
+<article><h3>Serie simultánea de medias horarias</h3><label>Escala del gráfico <select id="escala2"><option value="real">Lecturas en escala original</option><option value="forma">Min–max independiente por equipo</option></select></label><div id="serie2" class="plot wide"></div><p class="note">42i antes del P25 y 42iQ filtrado. Los huecos corresponden a horas sin un promedio pareado válido.</p></article>
+<article><h3>Dispersión de las medias horarias</h3><p class="note" id="resScatter2"></p><div id="scatter2" class="plot"></div></article><div id="ciclo2"></div></section>
+<section id="p21" hidden role="tabpanel" aria-labelledby="t21"><h2>Periodo 2-1 · antes del vacío</h2><div id="tramo21"></div><div id="ciclo21"></div></section>
+<section id="p22" hidden role="tabpanel" aria-labelledby="t22"><h2>Periodo 2-2 · después del vacío</h2><div id="tramo22"></div><div id="ciclo22"></div></section>
+</main>
+<template id="panelTramo"><article><h3>Serie horaria simultánea por tratamiento</h3><p class="note cobertura"></p>
+<label>Tratamiento del 42i <select class="trat"><option value="i">Original</option><option value="filtro">Filtro superior (+3 DE)</option><option value="combinado">Filtro superior y mínimos diarios alineados</option></select></label>
+<label>Escala <select class="esc"><option value="real">Escala original</option><option value="forma">Min–max por equipo</option></select></label>
+<div class="serie plot wide"></div><p class="note criterio"></p>
+<details><summary>Niveles bajos diarios y sensibilidad al percentil 10</summary><div class="minimos plot"></div><p class="note bajos"></p></details>
+</article><article><h3>Dispersión y concordancia</h3><p class="note muestra"></p><div class="disp plot"></div>
+<p class="metricas"></p><div class="pair"><div><h3>Bland–Altman</h3><div class="ba plot"></div></div><div><h3>Probabilidad empírica de acuerdo</h3><div class="pa plot"></div></div></div></article>
+<article><h3>Validación temporal del ajuste entre equipos</h3><p class="note validacion"></p><p class="offset"></p><p class="note modelo"></p></article></template>
+<template id="panelCiclo">
+<article style="margin:18px 0"><h3>Ciclo promedio por hora del día</h3>
+<p class="note cobertura"></p>
+<label>Escala del perfil <select><option value="forma">Min–max de las 24 medias de cada equipo</option><option value="real">Escala original</option></select></label>
+<div class="perfil plot"></div><p class="note amplitud"></p></article>
+<article><h3>¿Se repiten las oscilaciones al día siguiente?</h3><p class="note">Para cada instrumento se compara la desviación respecto de la media de su día con su propia desviación 1 a 72 horas antes. Las guías marcan 24, 48 y 72 h.</p>
+<div class="retardos plot"></div><p class="note resultado"></p>
+<details><summary>Interpretación y fuentes</summary><p>La prueba de fase desplaza al azar el perfil horario dentro de cada bloque de siete días calendario. Se compara la variación observada entre las 24 medias con 1.999 combinaciones de fases. Los valores p se ajustan por Holm para los cuatro contrastes. Un resultado pequeño indica alineación con el reloj bajo este modelo; su interpretación depende de que las fases de los bloques sean intercambiables. La autocorrelación puede reflejar ambiente, operación o ambos.</p>
+<p>El manual del 42i describe calibraciones con aire cero y concentraciones patrón. La estimación de un perfil diario utiliza las lecturas ambientales y conserva el 42i sin P25. <a href="https://assets.thermofisher.com/TFS-Assets/LSG/manuals/EPM-manual-Model%2042inox.pdf">Manual Thermo, cap. 4</a> · <a href="https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc443.htm">NIST, estacionalidad</a></p></details></article>
+</template>
+<!-- DATOS -->
+<script>
+'use strict';
+const d=JSON.parse(document.getElementById('datos').textContent);
+const rows=d.serie.filter(p=>p.x!==null && p.y!==null);
+const fmt=(n,k=2)=>n.toLocaleString('es-CL',{minimumFractionDigits:k,maximumFractionDigits:k});
+const fill=(key,v)=>document.getElementById(key).textContent=v;
+const teal='#006b68', copper='#ad471e', ink='#173e3a';
+for(const [id,value] of Object.entries({n:rows.length,na:d.entrenamiento,np:d.prueba,r2:fmt(d.r2,3),corte:d.corte,
+  mae:fmt(d.mae),rmse:fmt(d.rmse),base:fmt(d.mae_base),rango:d.rango.map(v=>fmt(v,1)).join(' – ')})) fill(id,value);
+fill('criterio',`De ${d.horas} horas con cobertura suficiente se conservan ${rows.length}. Se usan los primeros 70 % de días disponibles (redondeo hacia abajo) para estimar el percentil 25 del 42i (${fmt(d.cero,4)}) y la recta. Se resta ese cero a cada lectura horaria del 42i y se excluyen los pares bajo el cero ajustado. La prueba usa los días restantes y mantiene fijos ambos parámetros. Las brechas se dejan vacías.`);
+fill('lectura',`La recta ${d.mae<d.mae_base?'reduce':'no reduce'} el error absoluto medio frente a predecir siempre la mediana del 42iQ de los días de ajuste. Los errores se expresan en la escala de NOx de las descargas.`);
+const config={responsive:true,displaylogo:false,scrollZoom:true,modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d'],
+  toImageButtonOptions:{format:'png',scale:2,filename:'NOx_Portillo_1-1'}};
+const axis=(title)=>({title:{text:title,standoff:10},gridcolor:'#e1e8e3',zerolinecolor:'#b0c3b9',automargin:true});
+const layout=(xt,yt)=>({font:{family:'Segoe UI, sans-serif',size:13,color:ink},margin:{l:55,r:16,t:22,b:48},
+  paper_bgcolor:'white',plot_bgcolor:'white',xaxis:axis(xt),yaxis:axis(yt),hovermode:'closest',
+  legend:{orientation:'h',y:1.02,x:0,yanchor:'bottom',font:{size:12}}});
+const seriesLayout=layout('Fecha de 2025','NOx · escala original');
+seriesLayout.xaxis={...seriesLayout.xaxis,type:'date',rangeslider:{visible:true,thickness:.13},tickformat:'%d/%m',hoverformat:'%d/%m %H:%M'};
+seriesLayout.hovermode='x unified';
+const series=[['y','42iQ directo · filtrado',teal],['x','42i con sonda · ajustado',copper]].map(([key,name,color])=>({
+  x:d.serie.map(p=>p.t),y:d.serie.map(p=>p[key]),name,type:'scatter',mode:'lines+markers',marker:{size:2.7},
+  line:{color,width:1.6},connectgaps:false,hovertemplate:'%{y:.2f}<extra></extra>'}));
+Plotly.newPlot('serie',series,seriesLayout,config);
+document.getElementById('reset').onclick=()=>Plotly.relayout('serie',{'xaxis.autorange':true,'yaxis.autorange':true});
+const points=(group,color,symbol)=>{const p=rows.filter(v=>v.grupo===group);return {
+  x:p.map(v=>v.x),y:p.map(v=>v.y),text:p.map(v=>v.t),mode:'markers',name:group,marker:{size:6.5,color,opacity:.7,symbol},
+  hovertemplate:'%{text}<br>42i: %{x:.2f}<br>42iQ: %{y:.2f}<extra></extra>'}};
+const eq=`42iQ estimado = ${fmt(d.intercepto,3)} ${d.pendiente<0?'−':'+'} ${fmt(Math.abs(d.pendiente),3)} × 42i ajustado`;
+const fitLayout=layout('42i ajustado · con sonda','42iQ filtrado · directo');
+fill('corr11',`Pearson ${fmt(d.concordancia.pearson,3)} · CCC de Lin ${fmt(d.concordancia.ccc,3)} · ${rows.length} pares antes de la regresión`);
+const dominioIdentidad=[Math.min(0,...rows.map(p=>p.x)),Math.max(...rows.map(p=>p.x))];
+fitLayout.margin.t=65;
+fitLayout.annotations=[{text:eq,xref:'paper',yref:'paper',x:.01,y:.99,xanchor:'left',yanchor:'top',showarrow:false,
+  bgcolor:'#f5f6f1',borderpad:5,font:{size:12,color:ink}}];
+Plotly.newPlot('scatter',[points('Ajuste',teal,'circle'),points('Prueba',copper,'diamond-open'),
+  {x:dominioIdentidad,y:dominioIdentidad,mode:'lines',name:'Identidad (y = x)',line:{color:'#697575',width:2,dash:'dash'}},
+  {x:d.rango,y:d.rango.map(v=>d.intercepto+d.pendiente*v),mode:'lines',name:'Recta de ajuste',line:{color:'#172f42',width:2}}],fitLayout,config);
+let built=false;
+document.getElementById('agreement').addEventListener('toggle',function(){
+  if(!this.open || built)return;
+  built=true;
+  const diff=rows.map(v=>v.y-v.x),avg=rows.map(v=>(v.y+v.x)/2);
+  const ba=layout('Promedio de ambos equipos','42iQ filtrado − 42i ajustado');
+  ba.shapes=[0,d.sesgo,...d.limites].map((v,i)=>({type:'line',xref:'paper',x0:0,x1:1,y0:v,y1:v,line:{color:i===0?'#a3b4af':copper,width:i===1?2:1,dash:i>1?'dash':'solid'}}));
+  ba.yaxis.range=[Math.min(0,...d.limites,...diff)-2,Math.max(...d.limites,...diff)+2];
+  ba.annotations=[{xref:'paper',yref:'paper',x:0,y:1.12,text:`Sesgo ${fmt(d.sesgo)} · Límites ${d.limites.map(v=>fmt(v)).join(' a ')}`,showarrow:false,xanchor:'left'}];
+  ba.margin.t=50;
+  Plotly.newPlot('ba',[{x:avg,y:diff,mode:'markers',marker:{color:teal,size:5,opacity:.65}}],ba,config);
+  const abs=diff.map(Math.abs).sort((a,b)=>a-b);
+  const pa=layout('Tolerancia absoluta','Horas dentro del margen (%)');
+  Plotly.newPlot('pa',[{x:[0,...abs],y:[0,...abs.map((v,i)=>100*(i+1)/abs.length)],mode:'lines',line:{color:teal,shape:'hv'},
+    hovertemplate:'Tolerancia %{x:.2f}<br>Acuerdo %{y:.1f}%<extra></extra>'}],pa,config);
+});
+const tabs=[...document.querySelectorAll('[role=tab]')];
+const sub=d.periodo12, agr=sub.acuerdo;
+const config12={...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'NOx_Portillo_1-2'}};
+fill('forma12',`${sub.serie.length} horas. Rango máximo menos mínimo: ${fmt(sub.amplitud_i)} en el 42i y ${fmt(sub.amplitud_q)} en el 42iQ. Pearson = ${fmt(sub.r_forma,3)} en ambas escalas. Min–max lleva el mínimo de cada equipo a 0 y su máximo a 1; amplifica también las oscilaciones pequeñas.`);
+fill('muestra12',`Cero P25 del 42i = ${fmt(sub.cero,4)}, estimado en ajuste. ${sub.entrenamiento+sub.prueba} pares retenidos. Diferencia = 42iQ filtrado menos 42i ajustado, antes de la regresión.`);
+fill('split12',`Ajuste con ${sub.entrenamiento} horas; prueba con ${sub.prueba} horas retenidas desde el ${sub.inicio_prueba}. Misma regla temporal del panel 1-1.`);
+function statList(id,items){
+  const list=document.getElementById(id);
+  for(const [label,value] of items){const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;row.append(dt,dd);list.append(row)}
+}
+statList('metricas12',[['Pearson',fmt(agr.pearson,3)],['CCC de Lin',fmt(agr.ccc,5)],['Diferencia media',fmt(agr.sesgo)],
+  ['Límites clásicos de acuerdo',agr.limites.map(v=>fmt(v)).join(' a ')],
+  ...agr.tolerancias.map((t,i)=>['Horas dentro de ±'+t,fmt(agr.acuerdo[i]*100,1)+' %'])]);
+statList('errores12',[['R² en ajuste',fmt(sub.r2,3)],['Error absoluto medio en prueba',fmt(sub.mae)],
+  ['Raíz del error cuadrático medio',fmt(sub.rmse)],['Error con mediana histórica',fmt(sub.base)]]);
+fill('conclusion12',`La recta ${sub.mae<sub.base?'reduce':'no reduce'} el error absoluto medio frente a usar la mediana del 42iQ de los días de ajuste.`);
+function drawShape(){
+  const norm=document.getElementById('escala12').value==='forma';
+  const excluir=document.getElementById('excluir12').checked, s=sub.sensibilidad;
+  const marcadas=sub.serie.filter(p=>p.extrema);
+  fill('sens12',`Regla exploratoria aplicada una vez a las ${sub.serie.length} horas. Intervalo del 42i: ${s.limites.map(v=>fmt(v,3)).join(' a ')}. Horas marcadas: ${marcadas.map(p=>p.t).join(', ')}. Sin esos pares, el rango del 42i pasa de ${fmt(sub.amplitud_i)} a ${fmt(s.amplitud)}. Con el mismo P25, Pearson pasa de ${fmt(agr.pearson,3)} a ${fmt(s.acuerdo.pearson,3)} y CCC de ${fmt(agr.ccc,5)} a ${fmt(s.acuerdo.ccc,5)}. El selector afecta a esta serie y a su dispersión; los demás paneles conservan su muestra original.`);
+  const suffix=excluir?'_sin':'';
+  const traces=[[norm?'fi'+suffix:'i','42i con sonda',copper],[norm?'fq'+suffix:'q','42iQ filtrado',teal]].map(([key,name,color])=>({
+    x:sub.serie.map(p=>p.t),y:sub.serie.map(p=>excluir&&p.extrema?null:p[key]),mode:'lines',name,line:{color,width:1.6},connectgaps:false}));
+  const base=layout('Fecha de 2025',norm?'Forma relativa (0–1)':'NOx · escala original');
+  base.xaxis={...seriesLayout.xaxis};base.hovermode='x unified';
+  Plotly.react('curvas12',traces,base,config12);
+  drawScatter('12',excluir?sub.serie.filter(p=>!p.extrema):sub.serie);
+}
+document.getElementById('escala12').onchange=drawShape;
+document.getElementById('excluir12').onchange=drawShape;
+function drawScatter(id,pares){
+  const x=pares.map(p=>p.i), y=pares.map(p=>p.q);
+  const media=v=>v.reduce((a,b)=>a+b,0)/v.length;
+  const mx=media(x), my=media(y), vx=media(x.map(v=>(v-mx)**2)), vy=media(y.map(v=>(v-my)**2));
+  const cov=media(x.map((v,j)=>(v-mx)*(y[j]-my)));
+  fill('resScatter'+id,`${x.length} horas pareadas antes del P25 · Pearson ${fmt(cov/Math.sqrt(vx*vy),3)} · CCC de Lin ${fmt(2*cov/(vx+vy+(mx-my)**2),5)}. La línea indica igualdad de lecturas en la escala original.`);
+  const tramo=[Math.min(...x),Math.max(...x)];
+  Plotly.react('scatter'+id,[{x,y,text:pares.map(p=>p.t),mode:'markers',name:'Hora pareada',marker:{size:5,color:teal,opacity:.55},
+    hovertemplate:'%{text}<br>42i: %{x:.3f}<br>42iQ: %{y:.2f}<extra></extra>'},
+    {x:tramo,y:tramo,mode:'lines',name:'Identidad (y = x)',line:{color:'#475766',width:2,dash:'dash'}}],
+    layout('42i · antes del P25','42iQ · filtrado'),{...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Dispersion_NOx_'+(id==='12'?'1-2':'2')}});
+}
+let built12=false;
+function draw12(){
+  if(built12)return;
+  built12=true;drawShape();drawNivel();
+  const kept=sub.serie.filter(p=>p.i!==null && p.q!==null && p.i>=sub.cero);
+  const dif=kept.map(p=>p.q-(p.i-sub.cero)),avg=kept.map(p=>(p.q+p.i-sub.cero)/2);
+  const ba=layout('Promedio de ambos equipos','42iQ filtrado − 42i ajustado');
+  ba.shapes=[0,agr.sesgo,...agr.limites].map((v,i)=>({type:'line',xref:'paper',x0:0,x1:1,y0:v,y1:v,line:{color:i===0?'#a3b4af':copper,width:i===1?2:1,dash:i>1?'dash':'solid'}}));
+  ba.yaxis.range=[Math.min(0,...agr.limites,...dif)-2,Math.max(...agr.limites,...dif)+2];
+  Plotly.newPlot('ba12',[{x:avg,y:dif,mode:'markers',marker:{color:teal,size:5,opacity:.65}}],ba,config12);
+  const sorted=dif.map(Math.abs).sort((a,b)=>a-b);
+  Plotly.newPlot('pa12',[{x:[0,...sorted],y:[0,...sorted.map((v,i)=>100*(i+1)/sorted.length)],mode:'lines',
+    line:{color:teal,shape:'hv'}}],layout('Tolerancia absoluta','Horas dentro del margen (%)'),config12);
+}
+function drawCycle(period,id){
+  const holder=document.getElementById(id);
+  if(holder.childElementCount)return;
+  holder.append(document.getElementById('panelCiclo').content.cloneNode(true));
+  const g=d.ciclos[period], p=g.perfil, lag=g.retardos;
+  const by=(s)=>holder.querySelector(s);
+  by('.cobertura').textContent=`${g.dias} días con 24 horas válidas cada uno. Cada punto promedia la misma hora de esos días. Se normaliza después de promediar. Las horas corresponden al reloj registrado.`;
+  by('.amplitud').textContent=`Amplitud real del perfil: 42i ${fmt(g.amplitud[0],3)} y 42iQ ${fmt(g.amplitud[1],2)}. Máximos a las ${g.maximo[0]} h y ${g.maximo[1]} h, respectivamente. Pearson entre perfiles: ${fmt(g.r_perfil,3)}; entre las horas individuales de estos días: ${fmt(g.r_horas,3)}.`;
+  by('.resultado').textContent=`Con 24 h de retardo hay ${lag[23].pares} pares. Correlación: 42i ${fmt(lag[23].i,3)} · 42iQ ${fmt(lag[23].q,3)}. Prueba de fase sobre ${g.bloques} bloques, p ajustado: 42i ${fmt(g.p_holm[0],4)} · 42iQ ${fmt(g.p_holm[1],4)}.`;
+  const cfg={...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Ciclo_NOx_'+period}};
+  function perfil(){
+    const norm=by('select').value==='forma';
+    const l=layout('Hora del día','NOx · escala original');
+    if(norm) l.yaxis=axis('Forma del perfil (0–1)');
+    l.xaxis.dtick=2;
+    Plotly.react(by('.perfil'),[[norm?'forma_i':'NOx_42i','42i',copper],[norm?'forma_Q':'Q_filtrado','42iQ filtrado',teal]].map(([key,name,color])=>({
+      x:p.map(v=>v.hora_dia),y:p.map(v=>v[key]),name,mode:'lines+markers',line:{color}})),l,cfg);
+  }
+  by('select').onchange=perfil;perfil();
+  const l=layout('Horas de retardo','Correlación con la propia serie');
+  l.yaxis.range=[-1,1];l.xaxis.dtick=6;
+  l.shapes=[24,48,72].map(k=>({type:'line',x0:k,x1:k,y0:-1,y1:1,line:{color:'#9bb3aa',width:1,dash:'dot'},layer:'below'}));
+  Plotly.newPlot(by('.retardos'),[['i','42i',copper],['q','42iQ filtrado',teal]].map(([key,name,color])=>({
+    x:lag.map(v=>v.k),y:lag.map(v=>v[key]),customdata:lag.map(v=>v.pares),name,mode:'lines',
+    hovertemplate:'%{x} h · r = %{y:.3f}<br>%{customdata} pares',line:{color}})),l,cfg);
+}
+function drawNivel(){
+  const n=sub.nivel, dias=n.dias;
+  fill('tendencia12',`Pendiente lineal descriptiva en ${dias.length} días completos: mínimo ${fmt(n.pendientes[0],4)} y percentil 10 ${fmt(n.pendientes[1],4)} unidades por día.`);
+  Plotly.newPlot('bajos12',[['minimo','Mínimo'],['p10','Percentil 10']].map(([key,name])=>({
+    x:dias.map(d=>d.dia),y:dias.map(d=>d[key]),name,mode:'lines+markers'})),layout('Fecha','42i · escala original'),config12);
+  function actualizar(){
+    const key=document.getElementById('nivel12').value;
+    const a=n[{i:'original',i_min:'minimo',i_p10:'p10'}[key]];
+    Plotly.react('nivelSerie',[{x:sub.serie.map(p=>p.t),y:sub.serie.map(p=>p[key]),mode:'lines',line:{color:copper},name:'42i'}],seriesLayout,config12);
+    fill('resultadoNivel',`Tras aplicar el mismo P25, en las mismas ${n.n} horas: Pearson ${fmt(a.pearson,3)} · CCC ${fmt(a.ccc,5)} · diferencia media (42iQ − 42i) ${fmt(a.sesgo)} · dentro de ±10 unidades: ${fmt(100*a.acuerdo[1],1)} %.`);
+  }
+  document.getElementById('nivel12').onchange=actualizar;actualizar();
+}
+function drawSerie2(){
+  const rows=d.ciclos['2'].serie, norm=document.getElementById('escala2').value==='forma';
+  const traces=[['i','42i directo',copper],['q','42iQ con sonda · filtrado',teal]].map(([key,name,color])=>{
+    const vals=rows.map(p=>p[key]),lo=Math.min(...vals), hi=Math.max(...vals);
+    const x=[],y=[];
+    rows.forEach((p,j)=>{
+      if(j && Date.parse(p.t.replace(' ','T')+'Z')-Date.parse(rows[j-1].t.replace(' ','T')+'Z')>3600000){x.push(p.t);y.push(null)}
+      x.push(p.t);y.push(norm?(hi>lo?(vals[j]-lo)/(hi-lo):null):vals[j]);
+    });
+    return {x,y,name,mode:'lines',line:{color},connectgaps:false};
+  });
+  Plotly.react('serie2',traces,{...seriesLayout,yaxis:axis(norm?'Forma relativa (0–1)':'NOx · escala original')},
+    {...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Serie_NOx_2'}});
+}
+document.getElementById('escala2').onchange=drawSerie2;
+function drawTramo(period,id){
+  const holder=document.getElementById('tramo'+id);
+  if(holder.childElementCount)return;
+  holder.append(document.getElementById('panelTramo').content.cloneNode(true));
+  const by=s=>holder.querySelector('.'+s), g=d.tramos[period], rows=g.serie;
+  const cfg={...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'NOx_'+period}};
+  const iName=period==='1-2'?'42i con sonda':'42i directo';
+  const qName=period==='1-2'?'42iQ directo':'42iQ con sonda';
+  by('cobertura').textContent=`${rows[0].t} a ${rows[rows.length-1].t} · ${rows.length} pares horarios. ${iName} y ${qName} filtrado.`;
+  by('criterio').textContent=`El límite superior del tramo es ${fmt(g.umbral,3)} (media + 3 DE); se excluyen ${g.excluidas} pares. En la vista combinada se usan días con 24 horas antes del filtro; se alinea su mínimo restante a ${fmt(g.ref,3)}, la mediana de mínimos de los días de ajuste. Esta vista es retrospectiva.`;
+  by('validacion').textContent=`42i original menos P25 (${fmt(g.cero,3)}), pares con resultado no negativo. Ajuste con ${g.ajuste} horas; prueba con ${g.prueba} desde ${g.corte}. El selector de tratamiento no interviene en esta validación.`;
+  by('offset').textContent=`Desplazamiento fijo estimado en ajuste: + (${fmt(g.offset,3)}). En prueba, CCC de ${fmt(g.antes.ccc,5)} a ${fmt(g.despues.ccc,5)}; sesgo de ${fmt(g.antes.sesgo)} a ${fmt(g.despues.sesgo)}. Pearson permanece en ${fmt(g.antes.pearson,3)}.`;
+  by('modelo').textContent=`Recta: 42iQ = ${fmt(g.coef[0],3)} + (${fmt(g.coef[1],3)}) × 42i ajustado. R² de ajuste ${fmt(g.r2,3)}. En prueba: MAE ${fmt(g.mae)}, RMSE ${fmt(g.rmse)} y MAE con la mediana histórica ${fmt(g.base)}.`;
+  function actualizar(){
+    const key=by('trat').value, norm=by('esc').value==='forma', m=g.comun[key];
+    const valid=rows.filter(p=>p[key]!=null);
+    const traces=[[key,iName,copper],['q',qName,teal]].map(([campo,name,color])=>{
+      const vals=valid.map(p=>p[campo]), lo=Math.min(...vals), hi=Math.max(...vals), x=[], y=[];
+      rows.forEach((p,j)=>{
+        if(j && Date.parse(p.t.replace(' ','T')+'Z')-Date.parse(rows[j-1].t.replace(' ','T')+'Z')>3600000){x.push(p.t);y.push(null)}
+        x.push(p.t);y.push(p[key]==null?null:norm?(hi>lo?(p[campo]-lo)/(hi-lo):null):p[campo]);
+      });
+      return {x,y,name,mode:'lines',line:{color},connectgaps:false};
+    });
+    Plotly.react(by('serie'),traces,{...seriesLayout,yaxis:axis(norm?'Forma relativa (0–1)':'NOx · escala original')},cfg);
+    const pares=rows.filter(p=>p.comun), x=pares.map(p=>p[key]-g.cero), y=pares.map(p=>p.q);
+    const dif=y.map((v,j)=>v-x[j]), avg=y.map((v,j)=>(v+x[j])/2), rango=[Math.min(...x),Math.max(...x)];
+    const individual=g.disponibles[key];
+    by('muestra').textContent=`Serie superior: ${valid.length} horas antes del P25. Con todas las horas disponibles para este tratamiento tras el P25 original (n = ${individual.n}), Pearson es ${fmt(individual.acuerdo.pearson,3)} y CCC es ${fmt(individual.acuerdo.ccc,5)}. Para comparar tratamientos, los gráficos inferiores usan las mismas ${pares.length} horas con P25 original superado, día completo y filtro superado. Se resta el mismo P25 a las tres variantes.`;
+    by('metricas').textContent=`Pearson ${fmt(m.pearson,3)} · CCC ${fmt(m.ccc,5)} · sesgo ${fmt(m.sesgo)} · límites ${m.limites.map(v=>fmt(v)).join(' a ')} · acuerdo en ±5, ±10 y ±20: ${m.acuerdo.map(v=>fmt(100*v,1)+' %').join(', ')}.`;
+    const points={x,y,mode:'markers',name:'Hora pareada',marker:{size:5,color:teal,opacity:.6}};
+    Plotly.react(by('disp'),[points,{x:rango,y:rango,mode:'lines',name:'Identidad (y = x)',line:{dash:'dash',color:ink}}],layout('42i tratado menos P25','42iQ filtrado'),cfg);
+    const ba=layout('Promedio de ambos equipos','42iQ − 42i tratado');
+    ba.shapes=[m.sesgo,...m.limites].map((v,j)=>({type:'line',xref:'paper',x0:0,x1:1,y0:v,y1:v,line:{color:copper,dash:j?'dash':'solid'}}));
+    ba.yaxis.range=[Math.min(...dif,...m.limites)-1,Math.max(...dif,...m.limites)+1];
+    Plotly.react(by('ba'),[{...points,x:avg,y:dif}],ba,cfg);
+    const abs=dif.map(Math.abs).sort((a,b)=>a-b);
+    Plotly.react(by('pa'),[{x:[0,...abs],y:[0,...abs.map((v,j)=>100*(j+1)/abs.length)],mode:'lines',line:{shape:'hv',color:teal}}],layout('Tolerancia absoluta','Acuerdo (%)'),cfg);
+  }
+  by('bajos').textContent=`Alineación sola, sin filtro de extremos, en días completos con P25 original superado. Mínimo: Pearson ${fmt(g.solo_min.pearson,3)} y CCC ${fmt(g.solo_min.ccc,5)}. Percentil 10: Pearson ${fmt(g.solo_p10.pearson,3)} y CCC ${fmt(g.solo_p10.ccc,5)}.`;
+  holder.querySelector('details').ontoggle=function(){if(this.open)Plotly.react(by('minimos'),[['minimo','Mínimo tras filtro'],['p10','P10 original']].map(([key,name])=>({x:g.bajos.map(p=>p.dia),y:g.bajos.map(p=>p[key]),name,mode:'lines+markers'})),layout('Día completo','Nivel bajo del 42i'),cfg)};
+  by('trat').onchange=actualizar;by('esc').onchange=actualizar;actualizar();
+}
+function selectTab(tab){
+  tabs.forEach(b=>{const active=b===tab;b.setAttribute('aria-selected',active);b.tabIndex=active?0:-1;
+    document.getElementById(b.getAttribute('aria-controls')).hidden=!active});
+  if(tab.id==='t1'){
+    const g=d.periodo1;
+    const l={...seriesLayout,shapes:[{type:'line',x0:g.corte,x1:g.corte,yref:'paper',y0:0,y1:1,line:{color:ink,dash:'dash'}}],
+      annotations:[{x:g.corte,yref:'paper',y:1,text:'1-1 ← corte → 1-2',showarrow:false,bgcolor:'white'}]};
+    Plotly.react('serie1',[['i','42i con sonda',copper],['q','42iQ directo · filtrado',teal]].map(([key,name,color])=>({
+      x:g.serie.map(p=>p.t),y:g.serie.map(p=>p[key]),name,mode:'lines',line:{color},connectgaps:false})),l,
+      {...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Serie_NOx_1'}});
+    fill('cambio1',`Corte operativo: ${g.corte}. El rango mediano del 42i dentro de bloques de seis horas cae de ${fmt(g.amplitudes[0],2)} a ${fmt(g.amplitudes[1],2)}. En las 24 horas a cada lado del corte hay ${g.minutos} registros de minuto y ${g.marcados} con bandera. La línea marca la división estadística; la hora física de una eventual incidencia se desconoce.`);
+  }
+  if(tab.id==='t12'){drawTramo('1-2','12');draw12();drawCycle('1-2','ciclo12')}
+  if(tab.id==='t21'||tab.id==='t22'){
+    const id=tab.id.slice(1),period='2-'+id[1];
+    drawTramo(period,id);drawCycle(period,'ciclo'+id);
+  }
+  if(tab.id==='t2'){drawSerie2();drawScatter('2',d.ciclos['2'].serie);drawCycle('2','ciclo2')}
+  document.querySelectorAll('.js-plotly-plot').forEach(el=>{if(el.offsetWidth)Plotly.Plots.resize(el)});
+}
+tabs.forEach((tab,i)=>{tab.onclick=()=>selectTab(tab);tab.onkeydown=e=>{
+  const to={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i+tabs.length-1)%tabs.length,Home:0,End:tabs.length-1}[e.key];
+  if(to!==undefined){e.preventDefault();tabs[to].focus();selectTab(tabs[to])}
+}});
+</script>
+</body></html>

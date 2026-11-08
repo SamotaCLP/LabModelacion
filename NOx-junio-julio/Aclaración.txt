@@ -1,0 +1,66 @@
+-Prof. Inés y curso Taller: Datos campaña Magee (Junio a Agosto 2026) + Campaña sonda de GRIMM CETAM/GRIMM MT  (13/03/2025 hasta el 19/06/2025) + Campaña sonda NOx 42i/42iQ (22/05/2025 hasta el 21/06/2025) + concordancia 42i/42iQ sin sonda (13/03/2025 al 22/05/2025)
+-Yunis: Datos 10 años MAAP versus 3 años (2022, 2023 y 2024) del MAGEE sin sonda + Datos TOPAS/GRIMM (TOPAS hay data entre el 28/08 y el 03/09, luego una brecha hasta el 07/10; luego continúan desde el 16/12 hasta el 29/01/2026) (GRIMM por otro lado, hay data entre 19/06 y el 7/10, luego un salto entre el 28/10 y 16/12/2025) Esto último corroboraré con ella directamente para ver qué data le entregaron en el pasado. Debido que los datos del GRIMM deben procesarse en el PC que usaba Carla, esto me tomará más tiempo volver a generar la serie de datos con la temporalidad mencionada, por lo que por mientras, le entregaría acceso a los datos MAAP/Magee.
+
+Los hitos temporales en el muestreo y la disponibilidad de data, establecidos para los propósitos mencionados, es:
+Enero 2025
+        10 de enero (desde la visita anterior al 10 de enero)
+        Directos al ambiente (sin sonda): Grimm MT, Thermo NOx 42iQ.
+
+Febrero 2025
+6 de febrero (10 de enero al 6 de febrero)
+        Directos al ambiente (sin sonda): Grimm CETAM, Thermo NOx 42iQ.**
+
+Marzo 2025
+        13 de marzo (6 de febrero al 13 de marzo)
+        Directos al ambiente (sin sonda): Grimm CETAM, Thermo NOx 42iQ.
+        Detalle de PM: A partir del 3 de marzo, se incorporó un segundo espectrómetro (Grimm MT). Entre el 13/03 y el 22/05, ambos Grimm (CETAM y MT) midieron en paralelo sin sonda.
+        Detalle de NOx: Según los registros de monitoreo, entre el 13/03 y el 22/05, los modelos Thermo 42i y 42iQ estuvieron midiendo de forma paralela sin sonda.
+
+Abril 2025 (13 de marzo al 24 de abril)
+        Directos al ambiente (sin sonda): Grimm (CETAM y MT), Thermo NOx 42iQ.
+        Detalle de BC: Se registra que, entre el 24/04 y el 22/05, Magee AE33 operó sin sonda.
+
+Mayo 2025 (22 y 30 de mayo)
+        Período de datos (22/05): 24 de abril al 22 de mayo. Período de datos (30/05): 22 de mayo al 30 de mayo.
+El 22 de mayo se instaló la sonda de toma de muestra y se incorporó el equipo Thermo NOx 42i. Además, se retiró el NOx 42iQ. A partir de esta fecha, el laboratorio quedó con la siguiente disposición:
+        Conectados a la sonda: Grimm (CETAM), Magee AE-33, Thermo NOx 42i.
+        Directos al ambiente: Grimm (MT), Thermo NOx 42iQ.
+Junio 2025 (19 de junio)
+        Período de datos: 30 de mayo al 19 de junio.
+        Conectados a la sonda: Grimm CETAM, Magee AE-33, Thermo NOx 42i.
+        Directos al ambiente: Grimm MT, Thermo NOx 42iQ.
+
+Julio 2025 (19 de junio al 25 de julio)
+        Conectados a la sonda: Grimm CETAM, Magee AE33, Thermo NOx 42i.
+        Directos al ambiente: Grimm MT, Thermo NOx 42iQ.
+
+Agosto 2025 (14 y 28 de agosto)
+        Período de datos: 25 de julio al 14 de agosto / 14 de agosto al 28 de agosto. Durante la visita de Julio se intercambió la disposición de los analizadores de gas 42 NOx:
+Visita del 14 de agosto:
+        Conectados a la sonda: Grimm CETAM, Magee AE33, Thermo NOx 42iQ.
+        Directos al ambiente: Thermo NOx 42i.
+        Visita del 28 de agosto:
+        Conectados a la sonda: Grimm CETAM, Magee AE33, Thermo NOx 42iQ.
+        Directos al ambiente: Thermo NOx 42i.
+Octubre 2025
+7 de octubre
+        Período de datos: 28 de agosto al 7 de octubre.
+        Conectados a la sonda: TOPAS (nueva incorporación), Magee AE33, Thermo NOx 42iQ.
+        Directos al ambiente: Grimm Cetam, Thermo NOx 42i.
+Diciembre 2025
+16 de diciembre
+        Período de datos: 7 de octubre al 16 de diciembre. (Sin visitas registradas en noviembre).
+	    Magee AE33  (con sonda), Grimm CETAM (sin sonda en ese momento), Thermo NOx 42iQ (sin sonda).
+
+Orden y Origen de los Datos en la carpeta 'Laboratorio (Prof Inés)':
+La carpeta está organizada en función de las tareas arriba mencionadas, por lo que los datos se organizaron en las carpetas "NOx 42i_42iQ"; "GRIMM Cetam_GRIMM MT"; y "Magee campaña 3 meses".
+"NOx 42i_42iQ" contiene data recopilada desde la base de Datos 'Datos NNTK's', de donde se extrajo la data de tipo cruda, en archivo .csv o .dat, a partir de la que directamente se puede extraer la concentración de NO, NO2 y NOx en ppb o ug/m3.
+"GRIMM Cetam_GRIMM MT" contiene data recopilada desde la base de datos 'Datos NNTK's, de donde se recopiló la data existente para el período de muestreo arriba mencionado. Dado que existen archivos crudos, es decir en formato .txt, en la base de datos, se procesó con el software GRIMM la data y se cargaron archivos .xslx exclusivamente, para trabajar los datos disponibles. 
+"Magee campaña 3 meses" contiene data recopilada directamente desde los registros y reportes elaborados como consecuencia de las salidas a terreno durante la campaña de invierno 2026. AE33, AE36 y TCA09 fueron recopilados a partir del archivo .xslx 'BC880_combined_AE36_ONA_TCA09_AE33_MAAP_5min_2026-06-15_00-00_a_2026-08-10_23-59_Portillo', el cual tiene la data sincronizada a una resolución temporal de cinco minutos, la data de los aetalómetros se encuentra cruda y suavizada con ONA. Adicionalmente, por cada instrumento, 'AE33' y 'AE36' contienen la data tratada con los script de sincronización suavizado y visualización empleada para la elaboración de los reportes de terreno. 
+
+La carpeta 'Yunis' cuenta con la data específica de las tareas asignadas a Yunis en el marco de su trabajo. Por esta razón, al interior se crearon las carpetas "GRIMM_TOPAS" y "MAAP_Magee". 
+La carpeta "MAAP_Magee" cuenta con data recopilada de los años 2022, 2023 y 2024. Se decidió acotar el análisis de la data histórica entre MAAP y Magee dado que el año 2025 la resolución y calidad de la data generada con el aetalómetro Magee es insuficiente, principalmente debido a la desinstalación para campaña Antártica, mantenimientos, etc. Cabe destacar que la data cargada tiene su origen en 'Compilado por años' de la base de datos 'Datos NNTK's', y se encuentra suavizada en el caso del AE33. 
+La carpeta "GRIMM_TOPAS" cuenta con data recopilada a partir de los registros y reportes generados durante el 2025 por empleados anteriores, disponibles en la base de datos 'Datos NNTK's'. Aquí existe una brecha en la disponibilidad de información debido que Yunis personalmente cuenta con data correspondiente al período entre 28/10 y 16/12/2025. Desconozco dónde y cómo se originó dicha serie de datos que ella tiene, por algún motivo, ese compilado sincronizó los registros del GRIMM a la resolución de 5 minutos del TOPAS. Como medida correctiva, la data cargada en la subcarpeta 'GRIMM' tiene resolución de 1 minuto. Además se cargó el .xlsx que Yunis tenía, para respaldo, dentro de la carpeta. 
+
+Atte, 
+George Kerrigan
