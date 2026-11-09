@@ -1,3 +1,586 @@
+# PASO 1. Cobertura diaria de NOx total ----------------------------------------
+# Ejecutar desde la carpeta de los 12 archivos de campaña.
+# Los conteos describen registros crudos, incluidos los que tengan alarma.
+
+# 1.1 Leer los archivos de ambos equipos ----
+archivos_42iQ <- list.files(pattern = "^12218618650_UserData42iQ_2025-.*\\.csv$")
+archivos_42i <- list.files(pattern = "^(42i |NOx_42i_).*\\.dat$", ignore.case = TRUE)
+if (length(archivos_42iQ) != 6L || length(archivos_42i) != 6L) {
+  stop("Revisa el directorio de trabajo: se esperan 6 CSV del 42iQ y 6 DAT del 42i.")
+}
+
+# UTC sirve aquí para conservar la hora escrita en ambos relojes, sin aplicar
+# cambios de horario de verano. La zona real de los instrumentos está sin confirmar.
+leer_minutos_42iQ <- function(archivo) {
+  # Las filas del CSV tienen una coma final que el encabezado no tiene.
+  encabezado <- strsplit(readLines(archivo, n = 1L), ",", fixed = TRUE)[[1]]
+  datos <- read.csv(archivo, skip = 1, header = FALSE, check.names = FALSE,
+                    col.names = c(encabezado, "Campo_final"))
+  data.frame(
+    minuto = as.POSIXct(datos[["Time Stamp"]], format = "%d/%m/%Y %H:%M:%S", tz = "UTC"),
+    NOx_42iQ = datos[["NOx Concentration (ppb or ug/m3)"]],
+    alarma_42iQ = datos[["General Alarm"]]
+  )
+}
+
+leer_minutos_42i <- function(archivo) {
+  datos <- read.table(archivo, skip = 5, header = TRUE, stringsAsFactors = FALSE)
+  data.frame(
+    minuto = as.POSIXct(paste(datos$Date, datos$Time), format = "%m-%d-%y %H:%M", tz = "UTC"),
+    NOx_42i = datos$nox,
+    flag_42i = datos$Flags
+  )
+}
+
+# Las listas conservan el origen de cada descarga para revisar los solapamientos.
+descargas_42iQ <- lapply(setNames(archivos_42iQ, archivos_42iQ), leer_minutos_42iQ)
+descargas_42i <- lapply(setNames(archivos_42i, archivos_42i), leer_minutos_42i)
+
+# 1.2 Unir las descargas y verificar duplicados ----
+unir_minutos_NOx <- function(descargas, equipo) {
+  datos <- unique(do.call(rbind, unname(descargas)))
+  if (anyNA(datos$minuto) || any(as.numeric(datos$minuto) %% 60 != 0)) {
+    stop("Revisar las fechas de ", equipo, ": hay registros sin minuto exacto.")
+  }
+  conflicto <- anyDuplicated(datos$minuto)
+  if (conflicto > 0L) {
+    stop("Descargas de ", equipo, " con distinto NOx o bandera en ",
+         format(datos$minuto[conflicto], tz = "UTC"))
+  }
+  datos[order(datos$minuto), ]
+}
+
+minutos_42iQ <- unir_minutos_NOx(descargas_42iQ, "42iQ")
+minutos_42i  <- unir_minutos_NOx(descargas_42i, "42i")
+minutos_NOx <- merge(minutos_42i, minutos_42iQ, by = "minuto", all = TRUE)
+minutos_NOx$fecha <- as.Date(minutos_NOx$minuto, tz = "UTC")
+
+# 1.3 Asignar la sonda según la bitácora y contar minutos por día ----
+# Se incluyen todos los días entre el primer y último registro, incluso los vacíos.
+dias_campana <- seq(min(minutos_NOx$fecha), max(minutos_NOx$fecha), by = "day")
+dia_rotacion <- as.Date("2025-07-25")
+equipo_con_sonda <- rep("Transición", length(dias_campana))
+equipo_con_sonda[dias_campana < dia_rotacion] <- "42i"
+equipo_con_sonda[dias_campana > dia_rotacion] <- "42iQ"
+indice_dia <- match(minutos_NOx$fecha, dias_campana)
+minutos_NOx$equipo_con_sonda <- equipo_con_sonda[indice_dia]
+
+hay_42i  <- !is.na(minutos_NOx$NOx_42i)
+hay_42iQ <- !is.na(minutos_NOx$NOx_42iQ)
+contar_por_dia <- function(hay_dato) {
+  tabulate(indice_dia[hay_dato], nbins = length(dias_campana))
+}
+
+cobertura_diaria_NOx <- data.frame(
+  fecha = dias_campana,
+  equipo_con_sonda = equipo_con_sonda,
+  minutos_42i = contar_por_dia(hay_42i),
+  minutos_42iQ = contar_por_dia(hay_42iQ),
+  minutos_compartidos = contar_por_dia(hay_42i & hay_42iQ)
+)
+
+# Resultado del paso 1. Para recorrer la tabla en RStudio: View(cobertura_diaria_NOx)
+print(head(cobertura_diaria_NOx))
+
+# PASO 2. Comparación horaria de NOx total ------------------------------------
+# Ejecutar después del paso 1. Se conserva la escala numérica de las descargas.
+# La comparación supone que ambos relojes y unidades son compatibles.
+
+# 2.1 Seleccionar los minutos que se usarán en ambos promedios ----
+# Se excluye el día del intercambio porque se desconoce la hora de la visita.
+# George identificó H como anómalo. Se usan minutos sin bandera en el 42i
+# y, como criterio de trabajo para el 42iQ, con alarma general igual a cero.
+# Los valores negativos y los picos sin alarma se conservan.
+pares_NOx <- subset(minutos_NOx,
+                    fecha != dia_rotacion &
+                    is.finite(NOx_42i) & is.finite(NOx_42iQ) &
+                    flag_42i == "--------" & alarma_42iQ == 0)
+pares_NOx$hora <- as.POSIXct(trunc(pares_NOx$minuto, "hours"), tz = "UTC")
+
+# 2.2 Calcular promedios por hora de reloj ----
+# Ejemplo: la hora 10:00 usa los minutos 10:00 a 10:59 de los dos equipos.
+# El 75 % de cobertura equivale a 45 de los 60 minutos posibles.
+promedios_NOx <- aggregate(cbind(NOx_42i, NOx_42iQ) ~ hora + equipo_con_sonda,
+                           data = pares_NOx, FUN = mean)
+conteos_NOx <- aggregate(minuto ~ hora, data = pares_NOx, FUN = length)
+names(conteos_NOx)[2] <- "minutos_pareados"
+horas_NOx <- merge(promedios_NOx, conteos_NOx, by = "hora")
+horas_NOx <- subset(horas_NOx, minutos_pareados >= 45L)
+horas_NOx$diferencia <- horas_NOx$NOx_42iQ - horas_NOx$NOx_42i
+horas_NOx$promedio_equipos <- (horas_NOx$NOx_42iQ + horas_NOx$NOx_42i) / 2
+
+# 2.3 Resumir las diferencias por configuración ----
+# Cada hora aporta un par. Una diferencia positiva indica que el 42iQ leyó más.
+resumir_horas_NOx <- function(datos) {
+  data.frame(equipo_con_sonda = datos$equipo_con_sonda[1],
+             horas_comparadas = nrow(datos),
+             diferencia_media = mean(datos$diferencia),
+             diferencia_absoluta_media = mean(abs(datos$diferencia)),
+             desviacion_diferencias = sd(datos$diferencia),
+             correlacion_Pearson = cor(datos$NOx_42i, datos$NOx_42iQ))
+}
+por_sonda_NOx <- split(horas_NOx, horas_NOx$equipo_con_sonda)
+resumen_horario_NOx <- do.call(rbind, unname(lapply(por_sonda_NOx, resumir_horas_NOx)))
+print(resumen_horario_NOx, digits = 4, row.names = FALSE)
+
+# 2.4 Graficar los pares horarios por configuración ----
+# En el panel izquierdo la diagonal indica igualdad. En el derecho, la línea
+# horizontal en cero permite ver cómo cambia la diferencia con la concentración.
+graficar_horas_NOx <- function(equipo) {
+  datos <- por_sonda_NOx[[equipo]]
+  configuracion <- paste("Sonda en", equipo)
+  limites <- range(horas_NOx$NOx_42i, horas_NOx$NOx_42iQ)
+  ajustes <- par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+  on.exit(par(ajustes))
+  plot(datos$NOx_42i, datos$NOx_42iQ, xlim = limites, ylim = limites,
+       xlab = "NOx horario del 42i", ylab = "NOx horario del 42iQ",
+       main = configuracion, pch = 16, cex = 0.55, col = "#235C8B65")
+  abline(a = 0, b = 1, lty = 2)
+  plot(datos$promedio_equipos, datos$diferencia,
+       xlim = range(horas_NOx$promedio_equipos), ylim = range(0, horas_NOx$diferencia),
+       xlab = "Promedio de los dos equipos", ylab = "NOx horario (42iQ - 42i)",
+       main = configuracion, pch = 16, cex = 0.55, col = "#235C8B65")
+  abline(h = 0, lty = 2)
+}
+graficar_horas_NOx("42i")
+graficar_horas_NOx("42iQ")
+
+# PASO 3. Evaluación del ajuste de cero y de la homologación de NOx ------------
+# Se usa el 42iQ como destino de la predicción para evaluar la corrección
+# sugerida para el 42i. Esto no establece cuál instrumento es más exacto.
+
+# 3.1 Separar ajuste y prueba por fecha ----
+# En cada configuración se reservan los últimos 14 días calendario con respecto
+# al último día observado. Ninguna lectura de prueba determina los parámetros.
+evaluar_ajustes_NOx <- function(horas) {
+  horas <- horas[order(horas$hora), ]
+  corte <- max(as.Date(horas$hora, tz = "UTC")) - 13
+  es_prueba <- as.Date(horas$hora, tz = "UTC") >= corte
+  ajuste <- horas[!es_prueba, ]
+  prueba <- horas[es_prueba, ]
+
+  # Media móvil de 60 min evaluada al cierre de cada hora (10:00 a 10:59,
+  # 11:00 a 11:59, etc.). Son los promedios pareados del paso 2, con >=45 min.
+  # Evaluar una vez por hora evita contar 60 ventanas casi idénticas.
+  rango <- range(ajuste$NOx_42i)
+  amplitud <- diff(rango)
+  if (amplitud <= 0) stop("El 42i no varía en el tramo de ajuste.")
+  normalizado <- (ajuste$NOx_42i - rango[1]) / amplitud
+  cero_relativo <- as.numeric(quantile(normalizado, 0.25))
+  prueba$NOx_relativo <- (prueba$NOx_42i - rango[1]) / amplitud - cero_relativo
+  prueba$conservada_P25 <- prueba$NOx_relativo >= 0
+
+  # Volver a la amplitud original conservando el nuevo cero equivale a
+  # restar el P25 del 42i. Así se puede comparar la diferencia con el 42iQ.
+  prueba$ajuste_P25 <- prueba$NOx_relativo * amplitud
+  prueba$ajuste_P25[!prueba$conservada_P25] <- NA_real_
+  prueba$sin_correccion <- prueba$NOx_42i
+  # Punto de comparación: predecir siempre la mediana histórica del 42iQ
+  # permite medir cuánto aporta disponer de la lectura horaria del 42i.
+  prueba$mediana_historica_42iQ <- median(ajuste$NOx_42iQ)
+  prueba$ajuste_constante <- prueba$NOx_42i + mean(ajuste$diferencia)
+  modelo <- lm(NOx_42iQ ~ NOx_42i, data = ajuste)
+  prueba$ajuste_lineal <- as.numeric(predict(modelo, newdata = prueba))
+  prueba
+}
+prueba_NOx <- do.call(rbind, unname(lapply(por_sonda_NOx, evaluar_ajustes_NOx)))
+
+# 3.2 Comparar errores en las horas reservadas ----
+# Error = predicción a partir del 42i menos lectura del 42iQ.
+# Se muestran todas las horas para los métodos de cobertura completa y,
+# aparte, exactamente las mismas horas retenidas por P25 para los cuatro.
+resumir_prueba_NOx <- function(datos) {
+  filas <- list()
+  for (grupo in c("Todas", "Retenidas por P25")) {
+    comparables <- if (grupo == "Todas") datos else datos[datos$conservada_P25, ]
+    metodos <- c("sin_correccion", "mediana_historica_42iQ", "ajuste_constante", "ajuste_lineal")
+    if (grupo == "Retenidas por P25") metodos <- c(metodos, "ajuste_P25")
+    for (metodo in metodos) {
+      error <- comparables[[metodo]] - comparables$NOx_42iQ
+      filas[[length(filas) + 1L]] <- data.frame(
+        sonda_en = datos$equipo_con_sonda[1], grupo = grupo, metodo = metodo,
+        horas = length(error), cobertura_pct = 100 * length(error) / nrow(datos),
+        error_medio = mean(error), error_absoluto_medio = mean(abs(error)))
+    }
+  }
+  do.call(rbind, filas)
+}
+resumen_prueba_NOx <- do.call(rbind, unname(lapply(
+  split(prueba_NOx, prueba_NOx$equipo_con_sonda), resumir_prueba_NOx)))
+print(resumen_prueba_NOx, digits = 4, row.names = FALSE)
+
+# PASO 4. Cambio observado alrededor de la rotación de sonda -----------------
+# Se vuelve a las horas originales del paso 2. La diferencia siempre es
+# 42iQ menos 42i, incluso cuando cambia el equipo conectado a la sonda.
+
+# 4.1 Comparar horarios equivalentes antes y después de una fecha ----
+comparar_rotacion_NOx <- function(fecha_corte, dias) {
+  distancia <- as.integer(as.Date(horas_NOx$hora, tz = "UTC") - fecha_corte)
+  dentro <- abs(distancia) <= dias & distancia != 0
+  datos <- horas_NOx[dentro, c("hora", "NOx_42i", "NOx_42iQ", "diferencia")]
+  distancia <- distancia[dentro]
+  # Primera semana a cada lado del corte, segunda con segunda, etc.
+  datos$semana <- (abs(distancia) - 1L) %/% 7L + 1L
+  datos$horario <- format(datos$hora, "%u-%H", tz = "UTC")
+  pares <- merge(datos[distancia < 0, ], datos[distancia > 0, ],
+                 by = c("semana", "horario"), suffixes = c("_antes", "_despues"))
+  cambio <- pares$diferencia_despues - pares$diferencia_antes
+  data.frame(corte = fecha_corte, dias_por_lado = dias,
+             pares_horarios = nrow(pares),
+             brecha_antes = mean(pares$diferencia_antes),
+             brecha_despues = mean(pares$diferencia_despues),
+             cambio_medio = mean(cambio), cambio_mediano = median(cambio),
+             cambio_42i = mean(pares$NOx_42i_despues - pares$NOx_42i_antes),
+             cambio_42iQ = mean(pares$NOx_42iQ_despues - pares$NOx_42iQ_antes))
+}
+
+# 4.2 Revisar si el cambio depende de las semanas elegidas ----
+# Análisis principal: dos semanas por lado. Sensibilidad: una y cuatro.
+rotacion_NOx <- do.call(rbind, lapply(c(7L, 14L, 28L), comparar_rotacion_NOx,
+                                      fecha_corte = dia_rotacion))
+print(rotacion_NOx, digits = 4, row.names = FALSE)
+
+# 4.3 Repetir la comparación en fechas sin intercambio documentado ----
+# A 15 días del intercambio, cada ventana de 14 días queda íntegramente en
+# una configuración. Estos contrastes describen la variación de fondo.
+cortes_control <- c(dia_rotacion - 15L, dia_rotacion + 15L)
+control_rotacion_NOx <- rbind(comparar_rotacion_NOx(cortes_control[1], 14L),
+                              comparar_rotacion_NOx(cortes_control[2], 14L))
+print(control_rotacion_NOx, digits = 4, row.names = FALSE)
+
+# PASO 5. Comprobar un posible desfase entre los relojes --------------------
+# Se contrasta el 42i en el minuto t con el 42iQ en el minuto t + k.
+# k positivo busca la lectura del 42iQ más tarde. Se usan los valores crudos
+# con las banderas del paso 2. Un máximo de correlación no prueba un error de reloj.
+
+# 5.1 Construir la curva de correlación para un tramo ----
+perfil_desfase_NOx <- function(datos, desfases) {
+  # Grilla regular: los huecos de campaña quedan como NA y nunca se comprimen.
+  indice <- as.integer(difftime(datos$minuto, min(datos$minuto), units = "mins")) + 1L
+  serie_Q <- rep(NA_real_, max(indice))
+  ok_Q <- which(datos$alarma_42iQ == 0 & is.finite(datos$NOx_42iQ))
+  serie_Q[indice[ok_Q]] <- datos$NOx_42iQ[ok_Q]
+  ok_i <- which(datos$flag_42i == "--------" & is.finite(datos$NOx_42i))
+  filas <- ok_i[indice[ok_i] + min(desfases) >= 1L &
+                 indice[ok_i] + max(desfases) <= length(serie_Q)]
+  # Las mismas lecturas del 42i participan en todos los desplazamientos.
+  comunes <- rep(TRUE, length(filas))
+  for (k in desfases) comunes <- comunes & is.finite(serie_Q[indice[filas] + k])
+  filas <- filas[comunes]
+  if (length(filas) < 2L) stop("Cobertura insuficiente para comparar desfases.")
+  r <- vapply(desfases, function(k) {
+    cor(datos$NOx_42i[filas], serie_Q[indice[filas] + k])
+  }, numeric(1))
+  data.frame(desfase_min = desfases, minutos = length(filas), r = r)
+}
+
+# 5.2 Elegir el desfase en ajuste y evaluarlo en los 14 días reservados ----
+probar_desfase_NOx <- function(equipo) {
+  datos <- subset(minutos_NOx, equipo_con_sonda == equipo)
+  # Usar el mismo corte calendario de prueba que en el paso 3.
+  corte <- min(as.Date(prueba_NOx$hora[prueba_NOx$equipo_con_sonda == equipo], tz = "UTC"))
+  # Ante un empate exacto, se prefiere el desplazamiento de menor magnitud.
+  desfases <- -60:60
+  ajuste <- perfil_desfase_NOx(datos[datos$fecha < corte, ], desfases)
+  prueba <- perfil_desfase_NOx(datos[datos$fecha >= corte, ], desfases)
+  elegido <- order(-ajuste$r, abs(desfases))[1]
+  data.frame(sonda_en = equipo, desfase_min = desfases[elegido],
+             minutos_ajuste = ajuste$minutos[elegido], minutos_prueba = prueba$minutos[elegido],
+             r_ajuste_sin = ajuste$r[desfases == 0], r_ajuste_con = ajuste$r[elegido],
+             r_prueba_sin = prueba$r[desfases == 0], r_prueba_con = prueba$r[elegido])
+}
+resumen_desfase_NOx <- rbind(probar_desfase_NOx("42i"), probar_desfase_NOx("42iQ"))
+print(resumen_desfase_NOx, digits = 4, row.names = FALSE)
+
+# PASO 6. Concordancia horaria de NOx según Lin (1989) ------------------------
+# Fuente: A Concordance Correlation Coefficient to Evaluate Reproducibility,
+# Biometrics 45, 255-268. DOI: 10.2307/2532051.
+# Usar las horas pareadas del paso 2 en su escala original y sin desfase.
+
+# 6.1 Calcular concordancia y sus componentes ----
+concordancia_Lin_NOx <- function(datos) {
+  x <- datos$NOx_42i
+  y <- datos$NOx_42iQ
+  media_x <- mean(x)
+  media_y <- mean(y)
+  # Momentos empíricos con divisor n, el mismo para varianzas y covarianza.
+  var_x <- mean((x - media_x)^2)
+  var_y <- mean((y - media_y)^2)
+  denominador <- var_x + var_y + (media_y - media_x)^2
+  data.frame(horas = length(x), Pearson = cor(x, y),
+             factor_nivel_escala = 2 * sqrt(var_x * var_y) / denominador,
+             CCC = 2 * mean((x - media_x) * (y - media_y)) / denominador,
+             diferencia_media = media_y - media_x,
+             dispersion_42i = sqrt(var_x), dispersion_42iQ = sqrt(var_y))
+}
+
+# 6.2 Recalcular omitiendo una semana calendario cada vez ----
+# El rango es un diagnóstico de sensibilidad descriptivo, no un intervalo de confianza.
+resumir_Lin_NOx <- function(datos) {
+  semana <- as.Date(cut(as.Date(datos$hora, tz = "UTC"), "week", start.on.monday = TRUE))
+  por_omision <- vapply(unique(semana), function(omitida) {
+    concordancia_Lin_NOx(datos[semana != omitida, ])$CCC
+  }, numeric(1))
+  data.frame(sonda_en = datos$equipo_con_sonda[1], concordancia_Lin_NOx(datos),
+             minimo_sin_una_semana = min(por_omision),
+             maximo_sin_una_semana = max(por_omision))
+}
+resumen_Lin_NOx <- do.call(rbind, unname(lapply(por_sonda_NOx, resumir_Lin_NOx)))
+print(resumen_Lin_NOx, digits = 5, row.names = FALSE)
+
+# PASO 7. Sensibilidad al filtrado del 42iQ y acuerdo horario ----------------
+# Ejecutar después de los pasos 1, 2 y 6. Se mantienen los criterios del 42i.
+
+# 7.1 Marcar rachas en la serie original y tratar los negativos ----
+# Detectar repeticiones antes de convertir negativos a cero. Los minutos
+# ausentes interrumpen la racha. Se descarta toda racha de longitud >= 4.
+q <- minutos_42iQ$NOx_42iQ
+repetido <- c(FALSE, diff(as.numeric(minutos_42iQ$minuto)) == 60 & diff(q) == 0)
+repetido[is.na(repetido)] <- FALSE
+grupo_racha <- cumsum(!repetido)
+racha_Q <- tabulate(grupo_racha)[grupo_racha] >= 4L
+sens_min <- pares_NOx
+sens_min$racha <- racha_Q[match(sens_min$minuto, minutos_42iQ$minuto)]
+sens_min$extremo <- sens_min$NOx_42iQ < -3
+sens_min$a_cero <- with(sens_min, !racha & !extremo & NOx_42iQ < 0)
+print(aggregate(cbind(racha, extremo, a_cero) ~ equipo_con_sonda, sens_min, sum))
+sens_min <- subset(sens_min, !racha & !extremo)
+sens_min$Q_filtrado <- pmax(0, sens_min$NOx_42iQ)
+
+# 7.2 Reconstruir los promedios usando exactamente los mismos minutos ----
+sens_min$n <- 1L
+llaves <- sens_min[c("hora", "equipo_con_sonda")]
+sens_h <- aggregate(sens_min[c("NOx_42i", "NOx_42iQ", "Q_filtrado")], llaves, mean)
+sens_h <- merge(sens_h, aggregate(sens_min["n"], llaves, sum), by = names(llaves))
+sens_h <- subset(sens_h, n >= 45)
+variantes_NOx <- list(base = horas_NOx, comunes = sens_h,
+                      filtrada = transform(sens_h, NOx_42iQ = Q_filtrado))
+
+# 7.3 Concordancia, límites de Bland-Altman y acuerdo dentro de tolerancia ----
+# Los límites clásicos describen aproximadamente el 95 % si las diferencias
+# son normales y de dispersión estable. Se añaden percentiles observados.
+resumir_acuerdo_NOx <- function(z) {
+  lin <- concordancia_Lin_NOx(z)
+  d <- z$NOx_42iQ - z$NOx_42i
+  data.frame(sonda_en = z$equipo_con_sonda[1], lin[c("horas", "Pearson", "CCC")],
+             sesgo = mean(d), limite_inf = mean(d) - 1.96 * sd(d),
+             limite_sup = mean(d) + 1.96 * sd(d),
+             P025 = unname(quantile(d, 0.025)), P975 = unname(quantile(d, 0.975)),
+             acuerdo_5 = mean(abs(d) <= 5), acuerdo_10 = mean(abs(d) <= 10),
+             acuerdo_20 = mean(abs(d) <= 20))
+}
+resumen_filtros_NOx <- do.call(rbind, lapply(names(variantes_NOx), function(nombre) {
+  z <- variantes_NOx[[nombre]]
+  tabla <- do.call(rbind, lapply(split(z, z$equipo_con_sonda), resumir_acuerdo_NOx))
+  data.frame(variante = nombre, tabla, row.names = NULL)
+}))
+print(resumen_filtros_NOx, digits = 4, row.names = FALSE)
+
+# 7.4 Figura de comparación para RStudio y PNG ----
+graficar_acuerdo_NOx <- function() {
+  ajustes <- par(mfrow = c(2, 3), mar = c(4.2, 4.3, 3, 1), las = 1)
+  on.exit(par(ajustes))
+  xlim_xy <- range(sens_h$NOx_42i, sens_h$Q_filtrado)
+  rango_media <- range((sens_h$NOx_42i + sens_h$Q_filtrado) / 2)
+  limites <- subset(resumen_filtros_NOx, variante == "filtrada")
+  rango_d <- range(sens_h$Q_filtrado - sens_h$NOx_42i, limites$limite_inf,
+                   limites$limite_sup, 0)
+  for (equipo in c("42i", "42iQ")) {
+    z <- subset(sens_h, equipo_con_sonda == equipo)
+    titulo <- paste("Sonda en", equipo)
+    d <- z$Q_filtrado - z$NOx_42i
+    plot(z$NOx_42i, z$Q_filtrado, pch = 16, cex = 0.6, col = "#21668170",
+         xlim = xlim_xy, ylim = xlim_xy, xlab = "42i", ylab = "42iQ filtrado",
+         main = paste(titulo, "| Pares horarios"))
+    abline(0, 1, lty = 2)
+    plot((z$Q_filtrado + z$NOx_42i) / 2, d, pch = 16, cex = 0.6, col = "#21668170",
+         xlim = rango_media, ylim = rango_d, main = paste(titulo, "| Bland-Altman"),
+         xlab = "Promedio de ambos equipos", ylab = "Diferencia (42iQ - 42i)")
+    abline(h = 0, col = "grey60")
+    abline(h = mean(d), col = "#983D22", lwd = 2)
+    abline(h = mean(d) + c(-1, 1) * 1.96 * sd(d), col = "#983D22", lty = 2)
+    plot(ecdf(abs(z$NOx_42iQ - z$NOx_42i)), xlim = c(0, max(abs(rango_d))),
+         ylim = c(0, 1), verticals = TRUE, do.points = FALSE, col = "#983D22",
+         main = paste(titulo, "| Acuerdo"), xlab = "Tolerancia absoluta",
+         ylab = "Fracción de horas", sub = "")
+    lines(ecdf(abs(d)), verticals = TRUE, do.points = FALSE, col = "#12577B", lty = 2)
+    legend("bottomright", c("Sin recorte a cero", "Filtrado"), lty = c(1, 2),
+           col = c("#983D22", "#12577B"), bty = "n", cex = 0.8)
+  }
+}
+if (interactive()) graficar_acuerdo_NOx()
+dir.create("Gráficas", showWarnings = FALSE)
+png(file.path("Gráficas", "Paso7_acuerdo_NOx.png"), width = 1800, height = 1000, res = 135)
+tryCatch(graficar_acuerdo_NOx(), finally = dev.off())
+
+# PASO 8. Medias horarias en el tiempo y ciclo diario de NOx -----------------
+# Lamsal et al. (2015), sección 5 y figura 5: comparación por hora del día.
+# Aquí se estudia NOx total en Portillo. Usamos el reloj registrado en campaña.
+
+# 8.1 Preparar las series filtradas y los días completos ----
+series_p8 <- sens_h[order(sens_h$hora), ]
+series_p8$dia <- as.Date(series_p8$hora, tz = "UTC")
+series_p8$hora_dia <- as.integer(format(series_p8$hora, "%H", tz = "UTC"))
+series_p8$dia_completo <- ave(series_p8$hora_dia, series_p8$dia, FUN = length) == 24L
+# Cada media del ciclo usa los mismos días a las 00, 01, ..., 23 horas.
+perfil_diario_NOx <- function(z) {
+  aggregate(cbind(NOx_42i, Q_filtrado) ~ hora_dia, z, mean)
+}
+resumir_ciclo_NOx <- function(z, tramo) {
+  perfil <- perfil_diario_NOx(z)
+  data.frame(sonda_en = z$equipo_con_sonda[1], tramo = tramo, dias = length(unique(z$dia)),
+             max_h_42i = perfil$hora_dia[which.max(perfil$NOx_42i)],
+             max_h_42iQ = perfil$hora_dia[which.max(perfil$Q_filtrado)],
+             amplitud_42i = diff(range(perfil$NOx_42i)),
+             amplitud_42iQ = diff(range(perfil$Q_filtrado)),
+             r_perfil = cor(perfil$NOx_42i, perfil$Q_filtrado))
+}
+por_periodo_p8 <- split(series_p8, series_p8$equipo_con_sonda)
+resumen_ciclo_NOx <- do.call(rbind, lapply(por_periodo_p8, function(z) {
+  mitad <- min(z$dia) + floor(as.numeric(max(z$dia) - min(z$dia)) / 2)
+  completos <- subset(z, dia_completo)
+  rbind(resumir_ciclo_NOx(completos, "Total"),
+        resumir_ciclo_NOx(subset(completos, dia <= mitad), "Primera mitad"),
+        resumir_ciclo_NOx(subset(completos, dia > mitad), "Segunda mitad"))
+}))
+print(resumen_ciclo_NOx, digits = 4, row.names = FALSE)
+
+# 8.2 Graficar cronología y perfil de 24 horas en escala original ----
+graficar_medias_NOx <- function() {
+  ajustes <- par(mfrow = c(2, 2), mar = c(4.1, 4.4, 3, 0.9))
+  on.exit(par(ajustes))
+  colores <- c("#AA4926", "#15658B")
+  perfiles <- lapply(por_periodo_p8, function(z) perfil_diario_NOx(subset(z, dia_completo)))
+  limites_series <- range(series_p8$NOx_42i, series_p8$Q_filtrado)
+  limites_ciclos <- range(lapply(perfiles, function(z) unlist(z[c("NOx_42i", "Q_filtrado")])))
+  for (equipo in names(por_periodo_p8)) {
+    z <- por_periodo_p8[[equipo]]
+    reloj <- seq(min(z$hora), max(z$hora), by = "hour")
+    grilla <- z[match(reloj, z$hora), ]
+    plot(reloj, grilla$Q_filtrado, type = "l", col = colores[2], ylim = limites_series,
+         main = paste("Serie horaria | Sonda en", equipo), xlab = "Fecha de 2025",
+         ylab = "NOx en escala original")
+    lines(reloj, grilla$NOx_42i, col = colores[1])
+    legend("topright", c("42i", "42iQ filtrado"), col = colores, lty = 1, bty = "n")
+    p <- perfiles[[equipo]]
+    matplot(p$hora_dia, p[c("NOx_42i", "Q_filtrado")], type = "o", pch = c(16, 1),
+            lty = 1, col = colores, ylim = limites_ciclos, xlab = "Hora del reloj",
+            ylab = "NOx medio de los días completos", main = paste("Ciclo diario | Sonda en", equipo))
+  }
+}
+if (interactive()) graficar_medias_NOx()
+png(file.path("Gráficas", "Paso8_medias_horarias_NOx.png"), width = 1800, height = 980, res = 140)
+tryCatch(graficar_medias_NOx(), finally = dev.off())
+
+# PASO 9. Ciclo diario y repetición temporal en 1-2 y 2 ----------------------
+# Ejecutar después del paso 8. Usar el 42i antes del P25 y el 42iQ filtrado.
+# Días completos: los 24 promedios de reloj se calculan con los mismos días.
+# El 25/07 sigue excluido. No se interpola entre visitas ni entre días.
+ciclo_datos <- subset(series_p8, dia_completo & dia >= as.Date("2025-06-21"))
+ciclo_datos$periodo <- ifelse(ciclo_datos$dia < dia_rotacion, "1-2", "2")
+
+# 9.1 Promediar por hora y solo entonces normalizar cada perfil ----
+normalizar_perfil <- function(v) {
+  rango <- range(v)
+  if (diff(rango) == 0) return(rep(NA_real_, length(v)))
+  (v - rango[1]) / diff(rango)
+}
+
+# 9.2 Medir repetición a retardos de 1 a 72 horas reales ----
+analizar_reloj <- function(z) {
+  z <- z[order(z$hora), ]
+  perfil <- perfil_diario_NOx(z)
+  perfil$forma_i <- normalizar_perfil(perfil$NOx_42i)
+  perfil$forma_Q <- normalizar_perfil(perfil$Q_filtrado)
+  # Quitar el promedio de cada día para estudiar cambios intradiarios.
+  # Esto reduce la influencia de cambios de nivel entre semanas.
+  i <- z$NOx_42i - ave(z$NOx_42i, z$dia, FUN = mean)
+  q <- z$Q_filtrado - ave(z$Q_filtrado, z$dia, FUN = mean)
+  tiempos <- as.numeric(z$hora)
+  retardos <- do.call(rbind, lapply(1:72, function(k) {
+    anterior <- match(tiempos - k * 3600, tiempos)
+    ok <- !is.na(anterior)
+    data.frame(k = k, pares = sum(ok),
+               i = cor(i[ok], i[anterior[ok]]), q = cor(q[ok], q[anterior[ok]]))
+  }))
+
+  # 9.3 Comprobar si la fase del ciclo se mantiene entre semanas ----
+  # Hipótesis de referencia: cada bloque de siete días calendario podría
+  # tener su propio origen horario. Un desplazamiento circular común a
+  # todo el bloque preserva sus formas intradiarias y la relación i/Q.
+  # Estadístico: variación entre las 24 medias. Se compara con 1999
+  # reasignaciones de fase; no es una prueba de causalidad ni de calibración.
+  bloque <- as.integer(z$dia - min(z$dia)) %/% 7L
+  sumas <- lapply(split(seq_len(nrow(z)), bloque), function(filas) {
+    rowsum(cbind(i = i[filas], q = q[filas]), z$hora_dia[filas], reorder = TRUE)
+  })
+  dias <- length(unique(z$dia))
+  fuerza <- function(suma) colMeans((suma / dias)^2)
+  observada <- fuerza(Reduce("+", sumas))
+  simulada <- replicate(1999, {
+    rotadas <- lapply(sumas, function(m) m[(0:23 + sample.int(24, 1) - 1L) %% 24 + 1L, , drop = FALSE])
+    fuerza(Reduce("+", rotadas))
+  })
+  p <- (1 + rowSums(simulada >= observada)) / (ncol(simulada) + 1)
+  list(perfil = perfil, retardos = retardos, dias = dias, bloques = length(sumas),
+       amplitud = c(diff(range(perfil$NOx_42i)), diff(range(perfil$Q_filtrado))),
+       maximo = perfil$hora_dia[c(which.max(perfil$NOx_42i), which.max(perfil$Q_filtrado))],
+       r_perfil = cor(perfil$NOx_42i, perfil$Q_filtrado),
+       r_horas = cor(z$NOx_42i, z$Q_filtrado), p = unname(p))
+}
+set.seed(20250621)
+ciclos_NOx <- lapply(split(ciclo_datos, ciclo_datos$periodo), analizar_reloj)
+# Cuatro contrastes: dos equipos por dos periodos.
+p_ciclos <- matrix(p.adjust(unlist(lapply(ciclos_NOx, "[[", "p")), method = "holm"), nrow = 2)
+for (j in seq_along(ciclos_NOx)) ciclos_NOx[[j]]$p_holm <- p_ciclos[, j]
+for (periodo in names(ciclos_NOx)) {
+  info <- ciclos_NOx[[periodo]]
+  cat("\nPeriodo", periodo, "| días completos:", info$dias, "| bloques:", info$bloques, "\n")
+  print(data.frame(equipo = c("42i","42iQ"), amplitud = info$amplitud,
+                   hora_maxima = info$maximo, p_holm = info$p_holm))
+  print(subset(info$retardos, k %in% c(12,24,48,72)))
+}
+# La sección 16 del script de dashboard incorpora estos resultados sin leer
+# ni mezclar crudos del periodo 2 en los modelos de calibración del periodo 1.
+horas_panel_2 <- subset(series_p8, dia > dia_rotacion)
+ciclos_NOx[["2"]]$serie <- with(horas_panel_2, data.frame(
+  t = format(hora, "%Y-%m-%d %H:%M", tz = "UTC"), i = NOx_42i, q = Q_filtrado))
+# 9.3.1 Separar los tramos observados a ambos lados del mayor vacío ----
+horas_panel_2 <- horas_panel_2[order(horas_panel_2$hora), ]
+reinicio <- horas_panel_2$hora[which.max(diff(as.numeric(horas_panel_2$hora))) + 1L]
+tramo <- ifelse(horas_panel_2$hora < reinicio, "2-1", "2-2")
+subciclos <- lapply(split(horas_panel_2, tramo), function(z) {
+  info <- analizar_reloj(subset(z, dia_completo))
+  info$serie <- with(z, data.frame(t = format(hora, "%Y-%m-%d %H:%M", tz = "UTC"),
+                                   i = NOx_42i, q = Q_filtrado))
+  info
+})
+p_sub <- matrix(p.adjust(unlist(lapply(subciclos, "[[", "p")), "holm"), nrow = 2)
+for (j in seq_along(subciclos)) subciclos[[j]]$p_holm <- p_sub[, j]
+jsonlite::write_json(c(ciclos_NOx, subciclos), file.path("plantillas", "ciclos_diarios_NOx.json"),
+                     auto_unbox = TRUE, digits = 9, na = "null")
+
+# 9.4 Figura comparativa de los dos periodos para el informe ----
+graficar_periodicidad <- function() {
+  ajustes <- par(mfrow = c(2, 2), mar = c(4.3, 4.3, 3.5, 1))
+  on.exit(par(ajustes))
+  colores <- c("#A74523", "#15658B")
+  for (periodo in names(ciclos_NOx)) {
+    z <- ciclos_NOx[[periodo]]
+    titulo <- paste("Periodo", periodo)
+    matplot(z$perfil$hora_dia, z$perfil[c("forma_i", "forma_Q")], type = "o",
+            pch = c(16, 1), lty = 1, col = colores, main = paste(titulo, "| Ciclo diario"),
+            xlab = "Hora del reloj", ylab = "Perfil medio normalizado")
+    legend("topleft", c("42i", "42iQ filtrado"), col = colores, lty = 1, bty = "n")
+    matplot(z$retardos$k, z$retardos[c("i", "q")], type = "l", lwd = 2,
+            lty = 1, col = colores, ylim = c(-1, 1), main = paste(titulo, "| Repetición temporal"),
+            xlab = "Horas de retardo", ylab = "Correlación con la propia serie")
+    abline(h = 0, v = c(24, 48, 72), col = "grey65", lty = 3)
+  }
+}
+png(file.path("Gráficas", "Periodos_12_2_ciclo_diario.png"), width = 1500, height = 920, res = 130)
+tryCatch(graficar_periodicidad(), finally = dev.off())
+
 # 42iQ sin sonda -----------------------####################################
 
 #lectura 3 bases ----
