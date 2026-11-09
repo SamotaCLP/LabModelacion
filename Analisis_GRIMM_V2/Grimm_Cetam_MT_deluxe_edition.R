@@ -37,6 +37,7 @@ CORTE_SUPERIOR <- 5000
 TOLERANCIA_INICIAL <- 2
 MAX_PUNTOS_VISUALES <- 15000 
 
+
 mean_na <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 
 parse_grimm_datetime <- function(x) {
