@@ -5,6 +5,9 @@
 # + Múltiples pares de archivos (detección automática) + Intervalo de tiempo
 # =============================================================================
 
+library(beepr)
+
+
 pkgs <- c("tidyverse", "readxl", "lubridate", "plotly", "htmlwidgets",
           "htmltools", "here", "jsonlite", "scales", "rmarkdown") 
 missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
@@ -40,6 +43,9 @@ INTERVALO_INICIO <- NULL   # NULL = sin límite. Ej: "2025-05-22" o "2025-05-22 
 INTERVALO_FIN    <- NULL   # Ej: "2025-06-19" (si es solo fecha, incluye el día completo)
 ANIOS_VALIDOS    <- 2025   # años aceptados (antes estaba fijo en 2025)
 
+# ---- Reporte Markdown ----
+UMBRAL_HUECO_MIN <- 60     # se reportan intervalos sin datos mayores a este valor [minutos]
+
 mean_na <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 
 parse_grimm_datetime <- function(x) {
@@ -65,6 +71,18 @@ remove_upper_outliers <- function(x, metodo = METODO_OUTLIERS, k = MULTIPLICADOR
     x[ok & x > corte] <- NA_real_
   }
   return(x)
+}
+
+# Devuelve el umbral superior que usa remove_upper_outliers (NA si no aplica); solo para el reporte
+limite_outlier <- function(x, metodo = METODO_OUTLIERS, k = MULTIPLICADOR_OUTLIERS, corte = CORTE_SUPERIOR) {
+  ok <- is.finite(x)
+  if (metodo == "IQR") {
+    if (sum(ok) < 4) return(NA_real_)
+    q <- quantile(x[ok], probs = c(0.25, 0.75), na.rm = TRUE, names = FALSE)
+    return(q[2] + k * (q[2] - q[1]))
+  }
+  if (metodo == "CORTE") return(corte)
+  NA_real_
 }
 
 outlier_method_label <- function() {
@@ -162,7 +180,28 @@ load_grimm <- function(paths, instrument) {
               PM25 = mean_na(PM25), PM1 = mean_na(PM1),
               n_registros = n(), .groups = "drop")
   
-  list(data = clean_minute, raw_data = raw_minute, outliers = out)
+  # ----- Descripción de la data (para el reporte Markdown) -----
+  etiquetas <- c(TSP = "TSP", PM10 = "PM10", PM4 = "PM4", PM25 = "PM2.5", PM1 = "PM1")
+  desc <- purrr::map_dfr(fracs_cols, function(cn) {
+    x <- raw[[cn]]
+    ok <- is.finite(x)
+    lim <- limite_outlier(x)
+    of <- if (!is.na(lim)) ok & x > lim else rep(FALSE, length(x))
+    tibble(instrumento = instrument, fraccion = etiquetas[[cn]],
+           n_registros = length(x), n_validos = sum(ok), n_na = sum(!ok),
+           n_negativos = sum(x[ok] < 0), n_cero = sum(x[ok] == 0),
+           limite_superior = lim, n_outliers = sum(of),
+           minimo = if (any(ok)) min(x[ok]) else NA_real_,
+           media = if (any(ok)) mean(x[ok]) else NA_real_,
+           mediana = if (any(ok)) median(x[ok]) else NA_real_,
+           maximo = if (any(ok)) max(x[ok]) else NA_real_,
+           max_outlier = if (any(of)) max(x[of]) else NA_real_)
+  })
+  tiempo <- tibble(instrumento = instrument,
+                   n_registros = nrow(raw), n_minutos = nrow(raw_minute),
+                   muestreo_seg = if (nrow(raw) > 1) median(as.numeric(diff(raw$datetime), units = "secs")) else NA_real_)
+  
+  list(data = clean_minute, raw_data = raw_minute, outliers = out, desc = desc, tiempo = tiempo)
 }
 
 rc <- load_grimm(pares$cetam, "Cetam")
@@ -974,4 +1013,197 @@ for (f in c("Dashboard_Maestro_Concordancia.html",
   verificar_html_autocontenido(file.path(dir_html, f))
 }
 
+# =============================================================================
+# REPORTE EN MARKDOWN
+# =============================================================================
+
+generar_reporte_md <- function(ruta) {
+  
+  # ---- Helpers de formato ----
+  num  <- function(x, d = 2) ifelse(is.na(x), "–", formatC(as.numeric(x), format = "f", digits = d, big.mark = ","))
+  pct  <- function(x, d = 2) ifelse(is.na(x), "–", paste0(formatC(as.numeric(x), format = "f", digits = d), " %"))
+  fh   <- function(x) format(x, "%Y-%m-%d %H:%M")
+  dur  <- function(horas) {
+    d <- floor(horas / 24); h <- round(horas - 24 * d)
+    ifelse(d > 0, paste0(d, " d ", h, " h"), sprintf("%.1f h", horas))
+  }
+  tabla <- function(df) paste(knitr::kable(df, format = "pipe", align = "l"), collapse = "\n")
+  
+  md <- character()
+  add <- function(...) md <<- c(md, ...)
+  
+  # ---- Series de tiempo (minutos con datos) ----
+  t_c <- rc$raw_data$datetime_1m
+  t_m <- rm$raw_data$datetime_1m
+  series <- list(Cetam = t_c, MT = t_m, `Simultáneo (ambos)` = t_c[t_c %in% t_m])
+  
+  detectar_huecos <- function(t, umbral_min) {
+    t <- sort(unique(t))
+    if (length(t) < 2) return(tibble(desde = as.POSIXct(character()), hasta = as.POSIXct(character()), horas = numeric()))
+    dif <- as.numeric(diff(t), units = "mins")
+    i <- which(dif > umbral_min)
+    tibble(desde = t[i], hasta = t[i + 1], horas = dif[i] / 60)
+  }
+  
+  # ===========================================================================
+  add("# Reporte de análisis GRIMM: Cetam vs MT", "")
+  
+  # ---- 1. Datos de entrada y configuración ----
+  add("## 1. Datos de entrada y configuración", "", "**Pares de archivos utilizados:**", "")
+  add(tabla(tibble(Fecha = as.character(as.Date(pares$fecha, "%d%m%Y")),
+                   `Archivo Cetam` = basename(pares$cetam),
+                   `Archivo MT` = basename(pares$mt))), "")
+  add("**Configuración del análisis:**", "",
+      paste0("- Intervalo solicitado: ", if (is.null(INTERVALO_INICIO)) "sin límite inferior" else INTERVALO_INICIO,
+             " → ", if (is.null(INTERVALO_FIN)) "sin límite superior" else INTERVALO_FIN),
+      paste0("- Años aceptados: ", paste(ANIOS_VALIDOS, collapse = ", ")),
+      paste0("- Criterio de outliers: ", outlier_method_label(), " (solo valores superiores)"),
+      "- Resolución del análisis: promedios por minuto",
+      paste0("- Umbral para reportar intervalos sin datos: ", UMBRAL_HUECO_MIN, " minutos"),
+      "")
+  
+  # ---- 2. Rango de tiempo y cobertura ----
+  add("## 2. Rango de tiempo y cobertura", "")
+  tab_t <- bind_rows(lapply(names(series), function(nm) {
+    t <- unique(series[[nm]])
+    if (!length(t)) return(NULL)
+    ini <- min(t); fin <- max(t)
+    n_min <- length(t)
+    rng <- as.numeric(difftime(fin, ini, units = "mins")) + 1
+    tibble(Serie = nm, Inicio = fh(ini), Fin = fh(fin),
+           `Duración del rango` = dur(as.numeric(difftime(fin, ini, units = "hours"))),
+           `Minutos con datos` = num(n_min, 0),
+           `Cobertura del rango` = pct(100 * n_min / rng))
+  }))
+  add(tabla(tab_t), "")
+  
+  add("### Intervalos sin datos", "")
+  huecos <- bind_rows(lapply(names(series), function(nm) {
+    detectar_huecos(series[[nm]], UMBRAL_HUECO_MIN) |> mutate(Serie = nm)
+  }))
+  
+  if (nrow(huecos) == 0) {
+    add(paste0("No se detectaron intervalos sin datos mayores a ", UMBRAL_HUECO_MIN, " minutos."), "")
+  } else {
+    res <- huecos |> group_by(Serie) |>
+      summarise(n = n(), total = sum(horas), mayor = max(horas), .groups = "drop") |>
+      arrange(match(Serie, names(series)))
+    add(tabla(transmute(res, Serie,
+                        `N° de intervalos` = num(n, 0),
+                        `Tiempo total sin datos` = dur(total),
+                        `Intervalo más largo` = dur(mayor))), "")
+    
+    max_filas <- 50
+    det <- huecos |> arrange(desc(horas))
+    if (nrow(det) > max_filas) det <- slice_head(det, n = max_filas)
+    det <- det |> arrange(match(Serie, names(series)), desde)
+    add(paste0("Detalle (mayores a ", UMBRAL_HUECO_MIN, " min",
+               if (nrow(huecos) > max_filas) paste0("; se muestran los ", max_filas, " más largos") else "", "):"), "")
+    add(tabla(transmute(det, Serie,
+                        `Último dato antes del hueco` = fh(desde),
+                        `Primer dato después` = fh(hasta),
+                        `Duración` = dur(horas))), "")
+  }
+  
+  # ---- 3. Descripción de la data ----
+  add("## 3. Descripción de la data", "")
+  desc <- bind_rows(rc$desc, rm$desc)
+  tiempo <- bind_rows(rc$tiempo, rm$tiempo)
+  
+  add("**Observación por instrumento:**", "")
+  add(tabla(transmute(tiempo, Instrumento = instrumento,
+                      `Registros originales` = num(n_registros, 0),
+                      `Minutos con datos` = num(n_minutos, 0),
+                      `Intervalo de muestreo mediano` = ifelse(is.na(muestreo_seg), "–", paste0(num(muestreo_seg, 0), " s")))), "")
+  
+  add("**Conteo de registros por fracción** (antes de eliminar outliers; % sobre registros válidos):", "")
+  add(tabla(transmute(desc, Instrumento = instrumento, `Fracción` = fraccion,
+                      Registros = num(n_registros, 0),
+                      `Válidos` = num(n_validos, 0),
+                      `Vacíos / NA` = num(n_na, 0),
+                      Negativos = paste0(num(n_negativos, 0), " (", pct(100 * n_negativos / n_validos), ")"),
+                      Ceros = paste0(num(n_cero, 0), " (", pct(100 * n_cero / n_validos), ")"),
+                      Outliers = paste0(num(n_outliers, 0), " (", pct(100 * n_outliers / n_validos), ")"))), "")
+  
+  add("**Estadísticos de la data original** [µg/m³]:", "")
+  add(tabla(transmute(desc, Instrumento = instrumento, `Fracción` = fraccion,
+                      `Mínimo` = num(minimo), Media = num(media), Mediana = num(mediana),
+                      `Máximo` = num(maximo),
+                      `Mayor valor outlier` = num(max_outlier))), "")
+  
+  # ---- 4. Criterios ----
+  add("## 4. Criterios de outliers", "",
+      paste0("- **Método:** ", outlier_method_label(), "."),
+      "- Solo se eliminan valores **superiores** al límite; los valores negativos y los ceros **no** se eliminan, solo se reportan en la sección 3.",
+      "- Los valores eliminados se reemplazan por NA antes de promediar por minuto.",
+      "")
+  lc <- filter(desc, instrumento == "Cetam"); lm_ <- filter(desc, instrumento == "MT")
+  add("**Límite superior aplicado** [µg/m³]:", "")
+  add(tabla(tibble(`Fracción` = lc$fraccion,
+                   `Límite Cetam` = num(lc$limite_superior),
+                   `Límite MT` = num(lm_$limite_superior[match(lc$fraccion, lm_$fraccion)]))), "")
+  
+  # ---- 5. Outliers eliminados ----
+  add("## 5. Outliers eliminados", "")
+  oc <- filter(outliers, instrumento == "Cetam"); om <- filter(outliers, instrumento == "MT")
+  tab5 <- left_join(oc, om, by = "fraccion", suffix = c("_c", "_m"))
+  if (sum(outliers$n_excluido, na.rm = TRUE) == 0) {
+    add("No se eliminó ningún outlier en este intervalo.", "")
+  }
+  add(tabla(transmute(tab5, `Fracción` = fraccion,
+                      `Cetam: válidos originales` = num(n_original_c, 0),
+                      `Cetam: eliminados` = num(n_excluido_c, 0),
+                      `Cetam: %` = pct(pct_excluido_c),
+                      `MT: válidos originales` = num(n_original_m, 0),
+                      `MT: eliminados` = num(n_excluido_m, 0),
+                      `MT: %` = pct(pct_excluido_m))), "")
+  
+  # ---- 6. Concordancia ----
+  add("## 6. Resultados del análisis de concordancia", "",
+      "Calculados con los pares de minutos en que ambos instrumentos tienen dato válido, después de eliminar outliers. Diferencia = MT − Cetam.",
+      "")
+  
+  cat_ccc <- function(x) dplyr::case_when(is.na(x) ~ "–", x > 0.99 ~ "Casi perfecta",
+                                          x > 0.95 ~ "Sustancial", x > 0.90 ~ "Moderada", TRUE ~ "Pobre")
+  poa <- vapply(names(cols), function(fr) {
+    d <- pairs_for(fr)
+    if (nrow(d)) mean(d$abs_diferencia <= TOLERANCIA_INICIAL) else NA_real_
+  }, numeric(1))
+  
+  add("**Acuerdo y correlación:**", "")
+  add(tabla(transmute(metrics, `Fracción` = fraccion, `N° de pares` = num(n, 0),
+                      `Media Cetam` = num(media_Cetam), `Media MT` = num(media_MT),
+                      Pearson = num(Pearson, 3), `R² (OLS)` = num(R2_OLS, 3),
+                      `CCC de Lin` = num(CCC_Lin, 3))), "")
+  
+  add("**Sesgo, errores y regresión** (MT = β0 + β1 · Cetam):", "")
+  add(tabla(transmute(metrics, `Fracción` = fraccion,
+                      `Sesgo (MT − Cetam)` = num(sesgo_MT_menos_Cetam, 3),
+                      `Sesgo relativo` = pct(100 * sesgo_MT_menos_Cetam / media_Cetam),
+                      `LoA inferior` = num(LoA_inferior), `LoA superior` = num(LoA_superior),
+                      MAE = num(MAE, 3), RMSE = num(RMSE, 3),
+                      β0 = num(beta0, 3), β1 = num(beta1, 3),
+                      `PoA (±tolerancia)` = pct(100 * unname(poa[fraccion])))), "")
+  add(paste0("*PoA = proporción de pares con |MT − Cetam| ≤ ", TOLERANCIA_INICIAL, " µg/m³.*"), "")
+  
+  add("**Estadísticos de la diferencia (MT − Cetam)** [µg/m³]:", "")
+  tab_dif <- bind_rows(lapply(names(cols), function(fr) {
+    s <- calc_stats_vec(pairs_for(fr)$diferencia)
+    tibble(`Fracción` = fr, Media = num(s["media"], 3), Mediana = num(s["mediana"], 3),
+           SD = num(s["sd"], 3), `Mínimo` = num(s["min"], 3), Q1 = num(s["q25"], 3),
+           Q3 = num(s["q75"], 3), `Máximo` = num(s["max"], 3))
+  }))
+  add(tabla(tab_dif), "")
+  
+  writeLines(enc2utf8(md), ruta, useBytes = TRUE)
+  invisible(ruta)
+}
+
+cat("\nGenerando reporte Markdown...\n")
+archivo_md <- file.path(dir_resultados, "Reporte_Analisis_GRIMM.md")
+generar_reporte_md(archivo_md)
+cat("Reporte Markdown generado:", archivo_md, "\n")
+
 cat("\nEjecución finalizada con éxito.\n")
+
+beep()
