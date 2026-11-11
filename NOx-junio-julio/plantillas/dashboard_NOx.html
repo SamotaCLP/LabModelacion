@@ -45,6 +45,7 @@ details{margin-top:16px}summary{cursor:pointer;font-weight:650}details[open] sum
 <section id="p1" hidden role="tabpanel" aria-labelledby="t1"><div class="intro"><h2>Periodo 1 · cambio de amplitud del 42i</h2><p>22 de mayo – 24 de julio de 2025</p></div>
 <article><h3>1-1 y 1-2 en la misma escala</h3><p class="note">Medias horarias pareadas antes del ajuste P25. Arrastra para ampliar la noche del 20 al 21 de junio. Se conserva el reloj de las descargas.</p>
 <div class="plot wide" id="serie1"></div><p id="cambio1"></p></article>
+<article><h3>Distribución de las medias horarias</h3><p class="note" id="boxInfo1"></p><div class="plot" id="box1"></div></article>
 <article><h3>¿Qué se sabe sobre la nieve?</h3>
 <p>El viernes 20 hubo tránsito por el paso tras nevadas anteriores. El siguiente cierre de Guardia Vieja comenzó el sábado 21 a las 18:00 de Chile. El domingo 22 las cámaras de Ski Portillo mostraban nieve acumulada. La DGA informó 74 cm de manto en la ruta de nieve de Portillo al 23 de junio. La altura del manto no fecha una nevada ni mide la exposición de la toma del CETAM.</p>
 <p class="note"><a href="https://www.tiempodesanjuan.com/san-juan/sanjuaninos-y-mendocinos-cruzaron-chile-el-paso-los-libertadores-seis-dias-cerrado-n404930">Tránsito el viernes 20</a> · <a href="https://www.latercera.com/nacional/noticia/paso-los-libertadores-se-mantendra-cerrado-este-domingo-por-nevadas-en-la-cordillera/">Comunicado de cierre del sábado 21</a> · <a href="https://www.mdzol.com/sociedad/2025/6/22/webcams-y-fotos-asi-esta-el-paso-chile-estos-momentos-1879671.html">Imágenes del domingo 22</a> · <a href="https://dga.mop.gob.cl/uploads/sites/13/2025/01/2025-06-23-boletin-hidrometeorologico.pdf">Boletín DGA</a></p>
@@ -58,6 +59,7 @@ details{margin-top:16px}summary{cursor:pointer;font-weight:650}details[open] sum
 <div class="metric"><small>R² del ajuste</small><strong id="r2"></strong></div></div>
 <article><div class="headrow"><div><h3>Serie horaria simultánea</h3><p class="note">Arrastra sobre el gráfico o ajusta el selector inferior para ampliar un intervalo.</p></div>
 <button class="action" id="reset">Restablecer vista</button></div><div id="serie" class="plot wide" aria-label="NOx horario de ambos equipos"></div></article>
+<article><h3>Distribución de las medias horarias</h3><p class="note" id="boxInfo11"></p><div class="plot" id="box11"></div></article>
 <div class="grid"><article><h3>Recta de calibración</h3><p class="note">Una observación por hora. La recta se estima con los puntos de ajuste. La identidad representa lecturas iguales.</p>
 <p id="corr11"></p>
 <div id="scatter" class="plot" aria-label="Dispersión con regresión lineal"></div></article>
@@ -99,6 +101,7 @@ details{margin-top:16px}summary{cursor:pointer;font-weight:650}details[open] sum
 </section>
 <section id="p2" hidden role="tabpanel" aria-labelledby="t2"><div class="intro"><h2>Comparación tras la rotación</h2><p>26 de julio – 7 de octubre de 2025</p></div><p class="note">42i directo y 42iQ con sonda.</p>
 <article><h3>Serie simultánea de medias horarias</h3><label>Escala del gráfico <select id="escala2"><option value="real">Lecturas en escala original</option><option value="forma">Min–max independiente por equipo</option></select></label><div id="serie2" class="plot wide"></div><p class="note">42i antes del P25 y 42iQ filtrado. Los huecos corresponden a horas sin un promedio pareado válido.</p></article>
+<article><h3>Distribución de las medias horarias</h3><p class="note" id="boxInfo2"></p><div class="plot" id="box2"></div></article>
 <article><h3>Dispersión de las medias horarias</h3><p class="note" id="resScatter2"></p><div id="scatter2" class="plot"></div></article><div id="ciclo2"></div></section>
 <section id="p21" hidden role="tabpanel" aria-labelledby="t21"><h2>Periodo 2-1 · antes del vacío</h2><div id="tramo21"></div><div id="ciclo21"></div></section>
 <section id="p22" hidden role="tabpanel" aria-labelledby="t22"><h2>Periodo 2-2 · después del vacío</h2><div id="tramo22"></div><div id="ciclo22"></div></section>
@@ -108,7 +111,8 @@ details{margin-top:16px}summary{cursor:pointer;font-weight:650}details[open] sum
 <label>Escala <select class="esc"><option value="real">Escala original</option><option value="forma">Min–max por equipo</option></select></label>
 <div class="serie plot wide"></div><p class="note criterio"></p>
 <details><summary>Niveles bajos diarios y sensibilidad al percentil 10</summary><div class="minimos plot"></div><p class="note bajos"></p></details>
-</article><article><h3>Dispersión y concordancia</h3><p class="note muestra"></p><div class="disp plot"></div>
+</article><article><h3>Distribución de las medias horarias</h3><p class="note boxInfo"></p><div class="box plot"></div></article>
+<article><h3>Dispersión y concordancia</h3><p class="note muestra"></p><div class="disp plot"></div>
 <p class="metricas"></p><div class="pair"><div><h3>Bland–Altman</h3><div class="ba plot"></div></div><div><h3>Probabilidad empírica de acuerdo</h3><div class="pa plot"></div></div></div></article>
 <article><h3>Validación temporal del ajuste entre equipos</h3><p class="note validacion"></p><p class="offset"></p><p class="note modelo"></p></article></template>
 <template id="panelCiclo">
@@ -139,6 +143,22 @@ const axis=(title)=>({title:{text:title,standoff:10},gridcolor:'#e1e8e3',zerolin
 const layout=(xt,yt)=>({font:{family:'Segoe UI, sans-serif',size:13,color:ink},margin:{l:55,r:16,t:22,b:48},
   paper_bgcolor:'white',plot_bgcolor:'white',xaxis:axis(xt),yaxis:axis(yt),hovermode:'closest',
   legend:{orientation:'h',y:1.02,x:0,yanchor:'bottom',font:{size:12}}});
+// Distribuciones de las mismas horas y transformaciones de la serie principal.
+function drawBox(target,info,traces,normalized,description,period){
+  const paired=traces[0].y.map((v,j)=>j).filter(j=>traces.every(t=>Number.isFinite(t.y[j])));
+  const boxTraces=traces.map(t=>({
+    type:'box',name:t.name,y:paired.map(j=>t.y[j]),text:paired.map(j=>t.x[j]),
+    quartilemethod:'linear',boxpoints:'outliers',boxmean:false,
+    line:{color:t.line.color},marker:{color:t.line.color,size:4,opacity:.65},
+    hoveron:'boxes+points',hoverinfo:'y+text+name'
+  }));
+  const caption=typeof info==='string'?document.getElementById(info):info;
+  caption.textContent=`${paired.length} horas pareadas por equipo. ${description} La caja abarca del percentil 25 al 75 y la línea interior indica la mediana. Los bigotes llegan a las observaciones extremas dentro de 1,5 veces el rango intercuartílico (P75 − P25) desde sus bordes. Los puntos exteriores permanecen en la muestra. ${normalized?'Cada equipo se expresa respecto de su propio mínimo y máximo.':''}`;
+  const l=layout('Equipo',normalized?'Forma relativa (0–1)':'NOx · escala original');
+  l.showlegend=false;
+  Plotly.react(target,boxTraces,l,{...config,toImageButtonOptions:{
+    ...config.toImageButtonOptions,filename:'Boxplot_NOx_'+period}});
+}
 const seriesLayout=layout('Fecha de 2025','NOx · escala original');
 seriesLayout.xaxis={...seriesLayout.xaxis,type:'date',rangeslider:{visible:true,thickness:.13},tickformat:'%d/%m',hoverformat:'%d/%m %H:%M'};
 seriesLayout.hovermode='x unified';
@@ -146,6 +166,8 @@ const series=[['y','42iQ directo · filtrado',teal],['x','42i con sonda · ajust
   x:d.serie.map(p=>p.t),y:d.serie.map(p=>p[key]),name,type:'scatter',mode:'lines+markers',marker:{size:2.7},
   line:{color,width:1.6},connectgaps:false,hovertemplate:'%{y:.2f}<extra></extra>'}));
 Plotly.newPlot('serie',series,seriesLayout,config);
+drawBox('box11','boxInfo11',[series[1],series[0]],false,
+  '42i ajustado por P25 y 42iQ filtrado, antes de la regresión.','1-1');
 document.getElementById('reset').onclick=()=>Plotly.relayout('serie',{'xaxis.autorange':true,'yaxis.autorange':true});
 const points=(group,color,symbol)=>{const p=rows.filter(v=>v.grupo===group);return {
   x:p.map(v=>v.x),y:p.map(v=>v.y),text:p.map(v=>v.t),mode:'markers',name:group,marker:{size:6.5,color,opacity:.7,symbol},
@@ -285,6 +307,7 @@ function drawSerie2(){
   });
   Plotly.react('serie2',traces,{...seriesLayout,yaxis:axis(norm?'Forma relativa (0–1)':'NOx · escala original')},
     {...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Serie_NOx_2'}});
+  drawBox('box2','boxInfo2',traces,norm,'42i antes del P25 y 42iQ filtrado.','2');
 }
 document.getElementById('escala2').onchange=drawSerie2;
 function drawTramo(period,id){
@@ -312,6 +335,8 @@ function drawTramo(period,id){
       return {x,y,name,mode:'lines',line:{color},connectgaps:false};
     });
     Plotly.react(by('serie'),traces,{...seriesLayout,yaxis:axis(norm?'Forma relativa (0–1)':'NOx · escala original')},cfg);
+    drawBox(by('box'),by('boxInfo'),traces,norm,
+      by('trat').selectedOptions[0].text+'. Valores de la serie superior antes del P25.',period);
     const pares=rows.filter(p=>p.comun), x=pares.map(p=>p[key]-g.cero), y=pares.map(p=>p.q);
     const dif=y.map((v,j)=>v-x[j]), avg=y.map((v,j)=>(v+x[j])/2), rango=[Math.min(...x),Math.max(...x)];
     const individual=g.disponibles[key];
@@ -341,6 +366,9 @@ function selectTab(tab){
       x:g.serie.map(p=>p.t),y:g.serie.map(p=>p[key]),name,mode:'lines',line:{color},connectgaps:false})),l,
       {...config,toImageButtonOptions:{...config.toImageButtonOptions,filename:'Serie_NOx_1'}});
     fill('cambio1',`Corte operativo: ${g.corte}. El rango mediano del 42i dentro de bloques de seis horas cae de ${fmt(g.amplitudes[0],2)} a ${fmt(g.amplitudes[1],2)}. En las 24 horas a cada lado del corte hay ${g.minutos} registros de minuto y ${g.marcados} con bandera. La línea marca la división estadística; la hora física de una eventual incidencia se desconoce.`);
+    drawBox('box1','boxInfo1',[['i','42i con sonda',copper],['q','42iQ directo · filtrado',teal]].map(([key,name,color])=>({
+      x:g.serie.map(p=>p.t),y:g.serie.map(p=>p[key]),name,line:{color}})),false,
+      'Periodo completo antes del P25, incluidos 1-1 y 1-2.','1');
   }
   if(tab.id==='t12'){drawTramo('1-2','12');draw12();drawCycle('1-2','ciclo12')}
   if(tab.id==='t21'||tab.id==='t22'){
