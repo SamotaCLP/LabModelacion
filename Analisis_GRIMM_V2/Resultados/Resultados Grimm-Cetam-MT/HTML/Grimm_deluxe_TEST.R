@@ -40,7 +40,7 @@ MAX_PUNTOS_VISUALES <- 15000
 # ---- Selección de datos ----
 FECHAS_ARCHIVOS  <- NULL   # NULL = todos los pares encontrados; o c("22052025", "19062025")
 INTERVALO_INICIO <- NULL   # NULL = sin límite. Ej: "2025-05-22" o "2025-05-22 08:00:00"
-INTERVALO_FIN    <- NULL   # Ej: "2025-06-19" (si es solo fecha, incluye el día completo)
+INTERVALO_FIN    <- "2025-05-18"   # Ej: "2025-06-19" (si es solo fecha, incluye el día completo)
 ANIOS_VALIDOS    <- 2025   # años aceptados (antes estaba fijo en 2025)
 
 # ---- Reporte Markdown ----
