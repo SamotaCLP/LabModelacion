@@ -131,16 +131,20 @@ parse_intervalo <- function(x, tz, fin = FALSE) {
 }
 
 read_grimm_raw <- function(path) {
-  readxl::read_excel(path, sheet = "Mass values", skip = 4) |>
-    rename(datetime_raw = `date&time`,
-           TSP  = `TSP [ug/m3]`,
-           PM10 = `PM10 [ug/m3]`,
-           PM4  = `PM4 [ug/m3]`,
-           PM25 = `PM2,5 [ug/m3]`,
-           PM1  = `PM1 [ug/m3]`) |>
-    mutate(datetime = parse_grimm_datetime(datetime_raw),
-           across(c(TSP, PM10, PM4, PM25, PM1), ~ suppressWarnings(as.numeric(.x)))) |>
-    filter(!is.na(datetime), lubridate::year(datetime) %in% ANIOS_VALIDOS)
+  tryCatch({
+    readxl::read_excel(path, sheet = "Mass values", skip = 4) |>
+      rename(datetime_raw = `date&time`,
+             TSP  = `TSP [ug/m3]`,
+             PM10 = `PM10 [ug/m3]`,
+             PM4  = `PM4 [ug/m3]`,
+             PM25 = `PM2,5 [ug/m3]`,
+             PM1  = `PM1 [ug/m3]`) |>
+      mutate(datetime = parse_grimm_datetime(datetime_raw),
+             across(c(TSP, PM10, PM4, PM25, PM1), ~ suppressWarnings(as.numeric(.x)))) |>
+      filter(!is.na(datetime), lubridate::year(datetime) %in% ANIOS_VALIDOS)
+  }, error = function(e) {
+    stop("Error leyendo '", basename(path), "': ", conditionMessage(e), call. = FALSE)
+  })
 }
 
 load_grimm <- function(paths, instrument) {
@@ -204,8 +208,8 @@ load_grimm <- function(paths, instrument) {
   list(data = clean_minute, raw_data = raw_minute, outliers = out, desc = desc, tiempo = tiempo)
 }
 
-rc <- load_grimm(pares$cetam, "Cetam")
-rm <- load_grimm(pares$mt,    "MT")
+rc <- load_grimm(archivos_cetam, "Cetam")
+rm <- load_grimm(archivos_mt,    "MT")
 
 dc <- rc$data |> rename(TSP_C = TSP, PM10_C = PM10, PM4_C = PM4, PM25_C = PM25, PM1_C = PM1, n_Cetam = n_registros)
 dm <- rm$data |> rename(TSP_M = TSP, PM10_M = PM10, PM4_M = PM4, PM25_M = PM25, PM1_M = PM1, n_MT = n_registros)
@@ -1049,10 +1053,10 @@ generar_reporte_md <- function(ruta) {
   add("# Reporte de análisis GRIMM: Cetam vs MT", "")
   
   # ---- 1. Datos de entrada y configuración ----
-  add("## 1. Datos de entrada y configuración", "", "**Pares de archivos utilizados:**", "")
-  add(tabla(tibble(Fecha = as.character(as.Date(pares$fecha, "%d%m%Y")),
-                   `Archivo Cetam` = basename(pares$cetam),
-                   `Archivo MT` = basename(pares$mt))), "")
+  add("## 1. Datos de entrada y configuración", "", "**Archivos utilizados:**", "")
+  add(tabla(tibble(Instrumento = c(rep("Cetam", length(archivos_cetam)),
+                                   rep("MT",    length(archivos_mt))),
+                   Archivo = c(basename(archivos_cetam), basename(archivos_mt)))), "")
   add("**Configuración del análisis:**", "",
       paste0("- Intervalo solicitado: ", if (is.null(INTERVALO_INICIO)) "sin límite inferior" else INTERVALO_INICIO,
              " → ", if (is.null(INTERVALO_FIN)) "sin límite superior" else INTERVALO_FIN),

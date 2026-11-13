@@ -2,7 +2,8 @@
 # GRIMM CETAM vs MT — EDA interactivo, normalidad, concordancia y boxplots
 # Versión Optimizada: WebGL (scattergl), Max 15k puntos visuales, Diseño UI
 # Dashboard Maestro Unificado (Pestañas HTML) + Series Temporales
-# + Múltiples pares de archivos (detección automática) + Intervalo de tiempo
+# + Lectura desde carpetas separadas (CETAM / MT), archivos .xlsx o .xls
+# + Intervalo de tiempo
 # =============================================================================
 
 library(beepr)
@@ -19,16 +20,16 @@ if (!requireNamespace("robustbase", quietly = TRUE)) {
 }
 
 # Rutas
-dir_grimm      <- here::here("Analisis_GRIMM_V2")
-dir_datos      <- file.path(dir_grimm, "Datos")
-dir_datos_cetam <- file.path(dir_datos, "CETAM")   # <- pon aquí los .xlsx del Cetam
-dir_datos_mt    <- file.path(dir_datos, "MT")      # <- pon aquí los .xlsx del MT
-dir_resultados <- file.path(dir_grimm, "Resultados", "Resultados Grimm-Cetam-MT")
-dir_html       <- file.path(dir_resultados, "HTML")
-dir_tablas     <- file.path(dir_resultados, "tablas")
+dir_grimm       <- here::here("Analisis_GRIMM_V2")
+dir_datos       <- file.path(dir_grimm, "Datos")
+dir_datos_cetam <- file.path(dir_datos, "CETAM")   # <- pon aquí los .xlsx / .xls del Cetam
+dir_datos_mt    <- file.path(dir_datos, "MT")      # <- pon aquí los .xlsx / .xls del MT
+dir_resultados  <- file.path(dir_grimm, "Resultados", "Resultados Grimm-Cetam-MT")
+dir_html        <- file.path(dir_resultados, "HTML")
+dir_tablas      <- file.path(dir_resultados, "tablas")
 dir.create(dir_datos_cetam, recursive = TRUE, showWarnings = FALSE)
 dir.create(dir_datos_mt,    recursive = TRUE, showWarnings = FALSE)
-dir.create(dir_html, recursive = TRUE, showWarnings = FALSE)
+dir.create(dir_html,   recursive = TRUE, showWarnings = FALSE)
 dir.create(dir_tablas, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
@@ -44,7 +45,7 @@ MAX_PUNTOS_VISUALES <- 15000
 # ---- Selección de datos ----
 INTERVALO_INICIO <- NULL   # NULL = sin límite. Ej: "2025-05-22" o "2025-05-22 08:00:00"
 INTERVALO_FIN    <- "2025-05-18"   # Ej: "2025-06-19" (si es solo fecha, incluye el día completo)
-ANIOS_VALIDOS    <- 2025   # años aceptados (antes estaba fijo en 2025)
+ANIOS_VALIDOS    <- 2025   # años aceptados
 
 # ---- Reporte Markdown ----
 UMBRAL_HUECO_MIN <- 60     # se reportan intervalos sin datos mayores a este valor [minutos]
@@ -98,15 +99,14 @@ outlier_method_label <- function() {
   }
 }
 
-
 # =============================================================================
-# LISTADO DE ARCHIVOS POR CARPETA
+# LISTADO DE ARCHIVOS POR CARPETA (.xlsx y .xls)
 # =============================================================================
 
 listar_excel <- function(dir) {
   f <- list.files(dir, pattern = "\\.xlsx?$", full.names = TRUE, ignore.case = TRUE)
   f <- f[!grepl("^~\\$", basename(f))]   # ignora archivos temporales de Excel (~$archivo.xlsx)
-  if (!length(f)) stop("No se encontraron archivos Excel en: ", dir)
+  if (!length(f)) stop("No se encontraron archivos Excel (.xlsx / .xls) en: ", dir)
   sort(f)
 }
 
@@ -117,7 +117,6 @@ cat("Archivos Cetam (", length(archivos_cetam), "):\n  ",
     paste(basename(archivos_cetam), collapse = "\n  "), "\n", sep = "")
 cat("Archivos MT (", length(archivos_mt), "):\n  ",
     paste(basename(archivos_mt), collapse = "\n  "), "\n", sep = "")
-
 
 # =============================================================================
 # LECTURA Y PROCESAMIENTO DE DATOS
@@ -131,6 +130,7 @@ parse_intervalo <- function(x, tz, fin = FALSE) {
   z
 }
 
+# readxl detecta automáticamente si el archivo es .xls o .xlsx
 read_grimm_raw <- function(path) {
   tryCatch({
     readxl::read_excel(path, sheet = "Mass values", skip = 4) |>
@@ -149,7 +149,9 @@ read_grimm_raw <- function(path) {
 }
 
 load_grimm <- function(paths, instrument) {
-  raw <- purrr::map_dfr(paths, read_grimm_raw) |> arrange(datetime)
+  raw <- purrr::map_dfr(paths, read_grimm_raw) |>
+    arrange(datetime) |>
+    distinct(datetime, .keep_all = TRUE)   # evita duplicados si dos archivos se solapan
   
   # Filtro de intervalo (aplica a TODO lo que sigue)
   tz_dat <- lubridate::tz(raw$datetime)
@@ -209,8 +211,8 @@ load_grimm <- function(paths, instrument) {
   list(data = clean_minute, raw_data = raw_minute, outliers = out, desc = desc, tiempo = tiempo)
 }
 
-rc <- load_grimm(pares$cetam, "Cetam")
-rm <- load_grimm(pares$mt,    "MT")
+rc <- load_grimm(archivos_cetam, "Cetam")
+rm <- load_grimm(archivos_mt,    "MT")
 
 dc <- rc$data |> rename(TSP_C = TSP, PM10_C = PM10, PM4_C = PM4, PM25_C = PM25, PM1_C = PM1, n_Cetam = n_registros)
 dm <- rm$data |> rename(TSP_M = TSP, PM10_M = PM10, PM4_M = PM4, PM25_M = PM25, PM1_M = PM1, n_MT = n_registros)
@@ -314,7 +316,7 @@ widget_boxplots_interactivos <- function(fr) {
           return sorted[base];
         }
       }
-
+ 
       function updateBoxplots(){
         var qinf_p = parseFloat(s_inf.value);
         var qsup_p = parseFloat(s_sup.value);
@@ -653,7 +655,7 @@ js_tabs <- HTML("
         Plotly.Plots.resize(gd);
       });
     }
-
+ 
     function openTab(evt, tabId) {
       var contents = document.getElementsByClassName('tab-content');
       for (var i = 0; i < contents.length; i++) {
@@ -668,7 +670,7 @@ js_tabs <- HTML("
       current.style.display = 'block';
       current.classList.add('active');
       evt.currentTarget.classList.add('active');
-
+ 
       // Redimensionar los gráficos de la pestaña recién visible
       requestAnimationFrame(function() {
         resizeTabPlots(tabId);
@@ -1054,10 +1056,10 @@ generar_reporte_md <- function(ruta) {
   add("# Reporte de análisis GRIMM: Cetam vs MT", "")
   
   # ---- 1. Datos de entrada y configuración ----
-  add("## 1. Datos de entrada y configuración", "", "**Pares de archivos utilizados:**", "")
-  add(tabla(tibble(Fecha = as.character(as.Date(pares$fecha, "%d%m%Y")),
-                   `Archivo Cetam` = basename(pares$cetam),
-                   `Archivo MT` = basename(pares$mt))), "")
+  add("## 1. Datos de entrada y configuración", "", "**Archivos utilizados:**", "")
+  add(tabla(tibble(Instrumento = c(rep("Cetam", length(archivos_cetam)),
+                                   rep("MT",    length(archivos_mt))),
+                   Archivo = c(basename(archivos_cetam), basename(archivos_mt)))), "")
   add("**Configuración del análisis:**", "",
       paste0("- Intervalo solicitado: ", if (is.null(INTERVALO_INICIO)) "sin límite inferior" else INTERVALO_INICIO,
              " → ", if (is.null(INTERVALO_FIN)) "sin límite superior" else INTERVALO_FIN),
