@@ -43,7 +43,7 @@ TOLERANCIA_INICIAL <- 2
 MAX_PUNTOS_VISUALES <- 15000 
 
 # ---- Selección de datos ----
-INTERVALO_INICIO <- NULL   # NULL = sin límite. Ej: "2025-05-22" o "2025-05-22 08:00:00"
+INTERVALO_INICIO <- "2025-03-13"   # NULL = sin límite. Ej: "2025-05-22" o "2025-05-22 08:00:00"
 INTERVALO_FIN    <- "2025-05-18"   # Ej: "2025-06-19" (si es solo fecha, incluye el día completo)
 ANIOS_VALIDOS    <- 2025   # años aceptados
 
